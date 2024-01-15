@@ -1,0 +1,1 @@
+pub const SKIP_LOGO: bool = false;

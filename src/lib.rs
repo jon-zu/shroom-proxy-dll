@@ -31,6 +31,7 @@ use windows::{
     },
 };
 
+pub mod config;
 #[cfg(feature = "overlay")]
 pub mod overlay;
 pub mod util;
@@ -94,8 +95,10 @@ fn run() {
     #[cfg(feature = "overlay")]
     overlay::init_module(MODULE.load());
 
-    if let Err(err) = unsafe { ShroomHooks.enable() } {
-        log::error!("Failed to enable shroom hooks: {:?}", err);
+    if config::SKIP_LOGO {
+        if let Err(err) = unsafe { ShroomHooks.enable() } {
+            log::error!("Failed to enable shroom hooks: {:?}", err);
+        }
     }
 }
 

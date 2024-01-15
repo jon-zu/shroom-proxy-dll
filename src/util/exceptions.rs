@@ -393,7 +393,7 @@ fn write_trace(
     first_type_name: &Option<CString>,
     frames: &[StackFrame],
 ) -> std::io::Result<()> {
-    let mut f = OpenOptions::new().write(true).append(true).open(file)?;
+    let mut f = OpenOptions::new().append(true).open(file)?;
 
     writeln!(f, "----------\nException at {:?}", Utc::now())?;
     if let Some(zex) = zex {

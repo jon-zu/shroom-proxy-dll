@@ -15,8 +15,9 @@ use std::{ffi::c_void, fs::File, path::Path};
 use anyhow::Context;
 use crossbeam::atomic::AtomicCell;
 use log::LevelFilter;
+use shroom_hooks::ShroomHooks;
 use simplelog::{ColorChoice, Config, TermLogger, TerminalMode, WriteLogger};
-use util::{hooks::HookModule, exceptions};
+use util::{exceptions, hooks::HookModule};
 use win32_hooks::Win32Hooks;
 use windows::{
     core::{s, w, IUnknown, GUID, HRESULT},
@@ -33,9 +34,13 @@ use windows::{
 #[cfg(feature = "overlay")]
 pub mod overlay;
 pub mod util;
+
+pub mod shroom_ffi;
+
+pub mod shroom_hooks;
 pub mod win32_hooks;
 
-type FDirectInput8Create = unsafe extern "stdcall" fn(
+type FDirectInput8Create = unsafe extern "system" fn(
     hinst: HMODULE,
     dwversion: u32,
     riidltf: *const GUID,
@@ -49,7 +54,7 @@ static MODULE: AtomicCell<HMODULE> = AtomicCell::new(HMODULE(0));
 /// dinput8 exported function
 #[no_mangle]
 #[allow(unsupported_calling_conventions)]
-unsafe extern "stdcall" fn DirectInput8Create(
+unsafe extern "system" fn DirectInput8Create(
     hinst: HMODULE,
     dwversion: u32,
     riidltf: *const GUID,
@@ -88,6 +93,10 @@ fn run() {
     // Init the overlay If It's required
     #[cfg(feature = "overlay")]
     overlay::init_module(MODULE.load());
+
+    if let Err(err) = unsafe { ShroomHooks.enable() } {
+        log::error!("Failed to enable shroom hooks: {:?}", err);
+    }
 }
 
 fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
@@ -120,7 +129,10 @@ fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
 extern "system" fn DllMain(hmodule: HMODULE, call_reason: u32, reserved: *mut c_void) -> BOOL {
     match call_reason {
         DLL_PROCESS_ATTACH => {
-            initialize(hmodule).expect("Unable to initialize proxy dll");
+            if let Err(err) = initialize(hmodule) {
+                log::error!("Failed to initialize proxy dll: {:?}", err);
+                return BOOL::from(false);
+            }
         }
         DLL_PROCESS_DETACH => {
             log::info!("Detaching proxy dll");

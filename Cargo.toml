@@ -1,0 +1,63 @@
+[package]
+name = "shroom_proxy_dll"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "dinput8"
+crate-type = ["cdylib"]
+
+[profile.release]
+strip = true
+
+[features]
+overlay = ["imgui", "hudhook"]
+default = []
+
+[dependencies.windows]
+version = "0.52"
+features = [
+  "implement",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_System_LibraryLoader",
+  "Win32_Storage_FileSystem",
+  "Win32_Foundation",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Graphics_Gdi",
+  "Win32_System_Services",
+  "Win32_System_SystemServices",
+  "Win32_System_Console",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_Security",
+  "Win32_System_SystemInformation",
+  "Win32_UI_Shell",
+  "Win32_Graphics_Direct3D9",
+  "Win32_Networking_WinSock",
+  "Win32_System_Com",
+  "Win32_System_Ole",
+  "Win32_System_Variant",
+  "Win32_System_Kernel",
+  "Win32_System_Threading"
+]
+
+
+
+[dependencies]
+anyhow = "1"
+bitflags = "2"
+bytemuck = { version = "1", features = ["derive"] }
+hudhook = { version = "0.5", optional = true }
+imgui = { version = "0.11", optional = true }
+log = "0.4"
+paste = "1"
+# TODO: switch to crates.io after support iced support get's pushed
+retour = { git="https://github.com/Hpmason/retour-rs", features = ["static-detour", "thiscall-abi"] }
+region = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+simplelog = "0.12"
+crossbeam = "0.8.4"
+chrono = "0.4.31"

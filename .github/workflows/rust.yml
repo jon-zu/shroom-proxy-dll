@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Install mingw
+      run: sudo apt-get install -y gcc-mingw-w64
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
       with:

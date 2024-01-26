@@ -541,6 +541,7 @@ dependencies = [
  "serde_json",
  "simplelog",
  "static_assertions",
+ "win_dbg_logger",
  "windows 0.52.0",
 ]
 
@@ -727,6 +728,15 @@ name = "wasm-bindgen-shared"
 version = "0.2.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d91413b1c31d7539ba5ef2451af3f0b833a005eb27a631cec32bc0635a8602b"
+
+[[package]]
+name = "win_dbg_logger"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d1b4c22244dc27534d81e2f6fc3efd6b20e50c010f177efc20b719ec759a779"
+dependencies = [
+ "log",
+]
 
 [[package]]
 name = "winapi"

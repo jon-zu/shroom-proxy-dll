@@ -10,7 +10,7 @@
 // TODO should be disabled later
 #![allow(internal_features, clippy::missing_safety_doc)]
 
-use std::{ffi::c_void, fs::File, path::Path};
+use std::{borrow::Cow, ffi::c_void, fs::File};
 
 use anyhow::Context;
 use crossbeam::atomic::AtomicCell;
@@ -71,21 +71,34 @@ unsafe extern "system" fn DirectInput8Create(
     panic!("DirectInput8Create called before initialization");
 }
 
-fn setup_logs<T: AsRef<Path>>(file: Option<T>) -> anyhow::Result<()> {
+pub enum LogBackend {
+    Console,
+    File(Cow<'static, str>),
+    DebugLogger
+
+}
+
+fn setup_logs(backend: LogBackend) -> anyhow::Result<()> {
     let filter = LevelFilter::Trace;
     let cfg = simplelog::Config::default();
 
-    if let Some(file) = file {
-        let file = File::create(file.as_ref())?;
-        WriteLogger::init(filter, cfg, file)?;
-    } else {
-        unsafe { AllocConsole() }.context("Alloc console")?;
-        TermLogger::init(
-            filter,
-            Config::default(),
-            TerminalMode::Mixed,
-            ColorChoice::Auto,
-        )?;
+    match backend {
+        LogBackend::Console => {
+            unsafe { AllocConsole() }.context("Alloc console")?;
+            TermLogger::init(
+                filter,
+                Config::default(),
+                TerminalMode::Mixed,
+                ColorChoice::Auto,
+            )?;
+        }
+        LogBackend::File(file) => {
+            let file = File::create(file.as_ref())?;
+            WriteLogger::init(filter, cfg, file)?;
+        }
+        LogBackend::DebugLogger => {
+            win_dbg_logger::init();
+        }
     }
 
     Ok(())
@@ -104,7 +117,7 @@ fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
     MODULE.store(hmodule);
 
     // Setup the logger as console
-    setup_logs::<&str>(Some("shroom.log"))?;
+    setup_logs(LogBackend::File("shroom.log".into()))?;
 
     log::info!("Started");
 

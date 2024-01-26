@@ -17,7 +17,7 @@ use crossbeam::atomic::AtomicCell;
 use log::LevelFilter;
 use shroom_hooks::ShroomHooks;
 use simplelog::{ColorChoice, Config, TermLogger, TerminalMode, WriteLogger};
-use util::{exceptions, hooks::HookModule};
+use util::hooks::HookModule;
 use win32_hooks::Win32Hooks;
 use windows::{
     core::{s, w, IUnknown, GUID, HRESULT},
@@ -31,13 +31,14 @@ use windows::{
     },
 };
 
+use crate::config::CONFIG;
+
 pub mod config;
 #[cfg(feature = "overlay")]
 pub mod overlay;
 pub mod util;
-
+pub mod exceptions;
 pub mod shroom_ffi;
-
 pub mod shroom_hooks;
 pub mod win32_hooks;
 
@@ -80,7 +81,7 @@ fn setup_logs<T: AsRef<Path>>(file: Option<T>) -> anyhow::Result<()> {
     } else {
         unsafe { AllocConsole() }.context("Alloc console")?;
         TermLogger::init(
-            LevelFilter::Trace,
+            filter,
             Config::default(),
             TerminalMode::Mixed,
             ColorChoice::Auto,
@@ -95,18 +96,17 @@ fn run() {
     #[cfg(feature = "overlay")]
     overlay::init_module(MODULE.load());
 
-    if config::SKIP_LOGO {
-        if let Err(err) = unsafe { ShroomHooks.enable() } {
-            log::error!("Failed to enable shroom hooks: {:?}", err);
-        }
-    }
+    log::info!("Running");
 }
 
 fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
+    CONFIG.get_or_init(config::Config::default);
     MODULE.store(hmodule);
 
     // Setup the logger as console
-    setup_logs::<&str>(None)?;
+    setup_logs::<&str>(Some("shroom.log"))?;
+
+    log::info!("Started");
 
     // Load the system dinput8.dll
     let dinput8_lib = util::load_sys_dll(w!("dinput8.dll"))?;
@@ -117,19 +117,25 @@ fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
     // Do the win32 patches
     unsafe {
         Win32Hooks.enable()?;
+        ShroomHooks.enable()?;
     }
 
     exceptions::setup_exception_handler();
-
     // Launch run in a new thread, so we don't block the main thread
     std::thread::spawn(run);
 
     Ok(())
 }
 
+fn touch_file() -> anyhow::Result<()> {
+    File::create("tmp.txt")?;
+    Ok(())
+}
+
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 extern "system" fn DllMain(hmodule: HMODULE, call_reason: u32, reserved: *mut c_void) -> BOOL {
+    let _ = touch_file();
     match call_reason {
         DLL_PROCESS_ATTACH => {
             if let Err(err) = initialize(hmodule) {

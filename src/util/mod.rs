@@ -7,9 +7,9 @@ use region::Protection;
 
 use self::hooks::HookModule;
 
-pub mod exceptions;
 pub mod hooks;
 pub mod ref_time;
+pub mod stack_walker;
 
 extern "C" {
     #[link_name = "llvm.returnaddress"]
@@ -24,16 +24,6 @@ macro_rules! ret_addr {
     };
     (level: $level:expr) => {
         unsafe { $crate::return_address($level) as usize }
-    };
-}
-
-#[macro_export]
-macro_rules! static_assert { ($($t:tt)*) => { const _: () = assert!($($t)*); }; }
-
-#[macro_export]
-macro_rules! static_assert_size {
-    ($l:ty, $r:ty) => {
-        static_assert!(std::mem::size_of::<$l>() == std::mem::size_of::<$r>());
     };
 }
 

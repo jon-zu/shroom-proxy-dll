@@ -13,7 +13,6 @@ strip = true
 [features]
 overlay = ["imgui", "hudhook"]
 default = []
-
 [dependencies.windows]
 version = "0.52"
 features = [
@@ -37,12 +36,13 @@ features = [
   "Win32_Graphics_Direct3D9",
   "Win32_Networking_WinSock",
   "Win32_System_Com",
+  "Win32_System_Environment",
   "Win32_System_Ole",
   "Win32_System_Variant",
   "Win32_System_Kernel",
-  "Win32_System_Threading"
+  "Win32_System_ProcessStatus",
+  "Win32_System_Threading",
 ]
-
 
 
 [dependencies]
@@ -54,10 +54,14 @@ imgui = { version = "0.11", optional = true }
 log = "0.4"
 paste = "1"
 # TODO: switch to crates.io after support iced support get's pushed
-retour = { git="https://github.com/Hpmason/retour-rs", features = ["static-detour", "thiscall-abi"] }
+retour = { git = "https://github.com/Hpmason/retour-rs", features = [
+  "static-detour",
+  "thiscall-abi",
+] }
 region = "3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 simplelog = "0.12"
-crossbeam = "0.8.4"
-chrono = "0.4.31"
+crossbeam = "0.8"
+chrono = "0.4"
+static_assertions = "1"

@@ -65,7 +65,7 @@ extern "system" fn create_mutex_a_detour(
         let pid = std::process::id();
 
         let spoofed_mtx_name = format!("{name_s}_{pid}\0");
-        log::info!("Spoofing Mutex to: {}", spoofed_mtx_name);
+        log::info!("Spoofing Mutex to: {name_s}_{pid}");
 
         return CREATE_MUTEX_A_HOOK.call(
             lpmutexattributes,
@@ -109,9 +109,9 @@ impl HookModule for Win32Hooks {
     unsafe fn enable(&self) -> anyhow::Result<()> {
         FIND_FIRST_FILE_A_HOOK.enable()?;
         CREATE_MUTEX_A_HOOK.enable()?;
-        GET_TICK_COUNT_HOOK.enable()?;
-        TIME_GET_TIME_HOOK.enable()?;
-        todo!()
+        //GET_TICK_COUNT_HOOK.enable()?;
+        //TIME_GET_TIME_HOOK.enable()?;
+        Ok(())
     }
 
     unsafe fn disable(&self) -> anyhow::Result<()> {
@@ -119,6 +119,6 @@ impl HookModule for Win32Hooks {
         CREATE_MUTEX_A_HOOK.disable()?;
         GET_TICK_COUNT_HOOK.disable()?;
         TIME_GET_TIME_HOOK.disable()?;
-        todo!()
+        Ok(())
     }
 }

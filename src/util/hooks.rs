@@ -90,6 +90,22 @@ macro_rules! static_win32_fn_hook {
 pub trait HookModule {
     unsafe fn enable(&self) -> anyhow::Result<()>;
     unsafe fn disable(&self) -> anyhow::Result<()>;
+
+
+
+    unsafe fn enable_if(&self, cond: bool) -> anyhow::Result<()> {
+        if cond {
+            self.enable()?;
+        }
+        Ok(())
+    }
+
+    unsafe fn disable_if(&self, cond: bool) -> anyhow::Result<()> {
+        if cond {
+            self.disable()?;
+        }
+        Ok(())
+    }
 }
 
 impl<T: Function>  HookModule for GenericDetour<T> {

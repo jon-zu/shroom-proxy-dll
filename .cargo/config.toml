@@ -1,2 +1,4 @@
+# gnu: i686-pc-windows-gnu
+# msvc: i686-pc-windows-msvc
 [build]
 target = "i686-pc-windows-gnu"

@@ -8,18 +8,19 @@ use std::{
 
 use chrono::Local;
 use windows::Win32::{
-        Foundation::NTSTATUS,
-        System::{
-            Diagnostics::Debug::{
-                AddVectoredExceptionHandler, EXCEPTION_POINTERS, EXCEPTION_RECORD,
-            },
-            Kernel::ExceptionContinueSearch,
-        },
-    };
+    Foundation::NTSTATUS,
+    System::{
+        Diagnostics::Debug::{AddVectoredExceptionHandler, EXCEPTION_POINTERS, EXCEPTION_RECORD},
+        Kernel::ExceptionContinueSearch,
+    },
+};
 
 use crate::{
     config::CONFIG,
-    shroom_ffi::ztl::{ZException, ZEXCEPTION_MAGIC},
+    shroom_ffi::{
+        error_codes::ClientErrorCode,
+        ztl::{ZException, ZEXCEPTION_MAGIC},
+    },
     util::stack_walker::StackWalker,
 };
 
@@ -145,14 +146,23 @@ fn write_trace(
     let mut f = OpenOptions::new().create(true).append(true).open(file)?;
 
     writeln!(f, "{:-<80}", "")?;
-
     writeln!(f, "Exception at {}", Local::now())?;
 
     if let Some(cxx_ex) = cxx_ex {
         if let Some(zex) = cxx_ex.as_zexception() {
             let hres = zex.0;
+            write!(f, "ZException: {hres:?}")?;
+            
+            if let Some(ec) = ClientErrorCode::try_from(hres.0 as u32).ok() {
+                write!(f, "\tClientErrorCode: {:?}", ec)?;
+            }
+
             let msg = hres.message();
-            writeln!(f, "ZException: {hres:?} - {msg}")?;
+            if !msg.is_empty() {
+                write!(f, "\tMessage: {}", msg)?;
+            }
+
+            writeln!(f)?;
         }
 
         for (i, ty) in cxx_ex.types().iter().enumerate() {
@@ -229,7 +239,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
     if IS_HANDLING_EXCEPTION.swap(true, std::sync::atomic::Ordering::SeqCst) {
         return ExceptionContinueSearch.0;
     }
-    
+
     let walker = info.ContextRecord.as_ref().map(|ctx| {
         let walker = StackWalker::from_ctx(*ctx);
         if let Err(err) = load_init_sym(&walker) {

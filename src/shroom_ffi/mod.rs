@@ -3,6 +3,7 @@ use std::ffi::c_void;
 use crate::fn_ref;
 
 pub mod ztl;
+pub mod error_codes;
 /*pub mod com {
     pub mod iface;
 }

@@ -10,9 +10,9 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            skip_logo: true,
-            log_msgbox: true,
-            pdb_file: Some(CString::new("MapleStory.pdb").unwrap())
+            skip_logo: false,
+            log_msgbox: false,
+            pdb_file: None,//Some(CString::new("MapleStory.pdb").unwrap())
         }
     }
 }

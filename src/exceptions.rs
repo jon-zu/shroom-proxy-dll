@@ -152,8 +152,8 @@ fn write_trace(
         if let Some(zex) = cxx_ex.as_zexception() {
             let hres = zex.0;
             write!(f, "ZException: {hres:?}")?;
-            
-            if let Some(ec) = ClientErrorCode::try_from(hres.0 as u32).ok() {
+
+            if let Ok(ec) = ClientErrorCode::try_from(hres.0 as u32) {
                 write!(f, "\tClientErrorCode: {:?}", ec)?;
             }
 

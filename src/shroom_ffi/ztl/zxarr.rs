@@ -1,24 +1,32 @@
-use std::ptr;
+use std::{ffi::c_int, ptr};
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C, packed)]
-pub struct ZArray<T>(*const T);
+pub struct ZArray<T>(*mut T);
 
 #[derive(Debug)]
 #[repr(C, packed)]
 pub struct ZArrayHeader {
-    ref_count: i32,
-    cap: i32,
-    byte_len: i32,
+    ref_count: c_int,
+    cap: c_int,
+    byte_len: c_int,
 }
+
+
+unsafe impl<T: Send> Send for ZArray<T> {}
+unsafe impl<T: Sync> Sync for ZArray<T> {}
 
 impl<T> ZArray<T> {
     pub fn empty() -> Self {
-        unsafe { Self::from_ptr(ptr::null()) }
+        unsafe { Self::from_ptr(ptr::null_mut()) }
     }
 
-    pub unsafe fn from_ptr(ptr: *const T) -> Self {
+    pub unsafe fn from_ptr(ptr: *mut T) -> Self {
         Self(ptr)
+    }
+
+    pub fn as_ptr(&self) -> *mut T {
+        self.0
     }
 
     pub fn is_empty(&self) -> bool {

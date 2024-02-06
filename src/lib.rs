@@ -31,7 +31,7 @@ use windows::{
     },
 };
 
-use crate::config::CONFIG;
+use crate::{config::CONFIG, login::LoginHooks};
 
 //pub mod net;
 pub mod config;
@@ -42,6 +42,8 @@ pub mod exceptions;
 pub mod shroom_ffi;
 pub mod shroom_hooks;
 pub mod win32_hooks;
+pub mod login;
+pub mod socket;
 
 
 type FDirectInput8Create = unsafe extern "system" fn(
@@ -112,6 +114,8 @@ fn run() {
     overlay::init_module(MODULE.load());
 
     log::info!("Running");
+
+    unsafe { LoginHooks.enable() }.expect("Login hooks");
 }
 
 fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {

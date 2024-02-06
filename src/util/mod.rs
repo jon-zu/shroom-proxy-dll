@@ -10,6 +10,8 @@ use self::hooks::HookModule;
 pub mod hooks;
 pub mod ref_time;
 pub mod stack_walker;
+pub mod profiler;
+pub mod packet_schema;
 
 extern "C" {
     #[link_name = "llvm.returnaddress"]
@@ -20,10 +22,10 @@ extern "C" {
 #[macro_export]
 macro_rules! ret_addr {
     () => {
-        unsafe { $crate::return_address(0) as usize }
+        unsafe { $crate::util::return_address(0) as usize }
     };
     (level: $level:expr) => {
-        unsafe { $crate::return_address($level) as usize }
+        unsafe { $crate::util::return_address($level) as usize }
     };
 }
 

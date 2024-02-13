@@ -1,11 +1,11 @@
 use std::{ffi::c_int, ptr};
 
 #[derive(Debug, Copy, Clone)]
-#[repr(C, packed)]
+#[repr(C)]
 pub struct ZArray<T>(*mut T);
 
 #[derive(Debug)]
-#[repr(C, packed)]
+#[repr(C)]
 pub struct ZArrayHeader {
     ref_count: c_int,
     cap: c_int,
@@ -44,6 +44,9 @@ impl<T> ZArray<T> {
     }
 
     pub unsafe fn header_ptr(&self) -> *const ZArrayHeader {
+        if self.0.is_null() {
+            return ptr::null();
+        }
         std::mem::transmute(self.0.byte_sub(0xC))
     }
 

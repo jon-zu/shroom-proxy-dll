@@ -10,9 +10,10 @@
 // TODO should be disabled later
 #![allow(internal_features, clippy::missing_safety_doc)]
 
-use std::{borrow::Cow, ffi::c_void, fs::File};
+use std::{ffi::c_void, fs::File};
 
 use anyhow::Context;
+use config::LogBackend;
 use crossbeam::atomic::AtomicCell;
 use log::LevelFilter;
 use shroom_hooks::ShroomHooks;
@@ -31,20 +32,19 @@ use windows::{
     },
 };
 
-use crate::{config::CONFIG, login::LoginHooks};
+use crate::{config::CONFIG, login::LoginHooks, socket::PacketHooks};
 
 //pub mod net;
 pub mod config;
+pub mod exceptions;
+pub mod login;
 #[cfg(feature = "overlay")]
 pub mod overlay;
-pub mod util;
-pub mod exceptions;
 pub mod shroom_ffi;
 pub mod shroom_hooks;
-pub mod win32_hooks;
-pub mod login;
 pub mod socket;
-
+pub mod util;
+pub mod win32_hooks;
 
 type FDirectInput8Create = unsafe extern "system" fn(
     hinst: HMODULE,
@@ -75,14 +75,7 @@ unsafe extern "system" fn DirectInput8Create(
     panic!("DirectInput8Create called before initialization");
 }
 
-pub enum LogBackend {
-    Console,
-    File(Cow<'static, str>),
-    DebugLogger
-
-}
-
-fn setup_logs(backend: LogBackend) -> anyhow::Result<()> {
+fn setup_logs(backend: &LogBackend) -> anyhow::Result<()> {
     let filter = LevelFilter::Trace;
     let cfg = simplelog::Config::default();
 
@@ -97,10 +90,10 @@ fn setup_logs(backend: LogBackend) -> anyhow::Result<()> {
             )?;
         }
         LogBackend::File(file) => {
-            let file = File::create(file.as_ref())?;
+            let file = File::create(file)?;
             WriteLogger::init(filter, cfg, file)?;
         }
-        LogBackend::DebugLogger => {
+        LogBackend::Debug => {
             win_dbg_logger::init();
         }
     }
@@ -114,18 +107,36 @@ fn run() {
     overlay::init_module(MODULE.load());
 
     log::info!("Running");
+    let cfg = CONFIG.get().unwrap();
 
-    unsafe { LoginHooks.enable() }.expect("Login hooks");
+    unsafe { LoginHooks.enable_if(cfg.auto_login_data.is_some()) }.expect("Login hooks");
+    unsafe { PacketHooks.enable_if(cfg.packet_tracing.is_some()) }.expect("Packet hooks");
+}
+
+fn load_cfg() -> anyhow::Result<config::Config> {
+    let cfg_path = std::env::var("SHROOM_CONFIG").unwrap_or("config.toml".to_string());
+    let file = std::fs::read_to_string(&cfg_path)?;
+    Ok(toml::from_str(&file)?)
 }
 
 fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
-    CONFIG.get_or_init(config::Config::default);
+    let mut load_failed = false;
+    let cfg = CONFIG.get_or_init(|| match load_cfg() {
+        Ok(cfg) => cfg,
+        Err(_) => {
+            load_failed = true;
+            config::Config::default()
+        }
+    });
     MODULE.store(hmodule);
 
     // Setup the logger as console
-    setup_logs(LogBackend::File("shroom.log".into()))?;
+    setup_logs(&cfg.log_backend)?;
 
     log::info!("Started");
+    if load_failed {
+        log::warn!("Failed to load config, using default");
+    }
 
     // Load the system dinput8.dll
     let dinput8_lib = util::load_sys_dll(w!("dinput8.dll"))?;
@@ -146,15 +157,9 @@ fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn touch_file() -> anyhow::Result<()> {
-    File::create("tmp.txt")?;
-    Ok(())
-}
-
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 extern "system" fn DllMain(hmodule: HMODULE, call_reason: u32, reserved: *mut c_void) -> BOOL {
-    let _ = touch_file();
     match call_reason {
         DLL_PROCESS_ATTACH => {
             if let Err(err) = initialize(hmodule) {

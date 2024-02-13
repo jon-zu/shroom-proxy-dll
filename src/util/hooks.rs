@@ -86,6 +86,25 @@ macro_rules! static_win32_fn_hook {
     };
 }
 
+#[macro_export]
+macro_rules! hook_list {
+    ($name:ident, $($hook:ident,)+) => {
+        pub struct $name;
+
+        impl $crate::util::hooks::HookModule for $name {
+            unsafe fn enable(&self) -> anyhow::Result<()> {
+                $($hook.enable()?;)*
+                Ok(())
+            }
+
+            unsafe fn disable(&self) -> anyhow::Result<()> {
+                $($hook.disable()?;)*
+                Ok(())
+            }
+        }
+    };
+}
+
 
 pub trait HookModule {
     unsafe fn enable(&self) -> anyhow::Result<()>;

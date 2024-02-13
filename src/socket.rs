@@ -4,21 +4,45 @@ use std::{
 };
 
 use crate::{
-    lazy_hook, ret_addr,
-    shroom_ffi::{socket::{
-        cinpacket_decode1, cinpacket_decode2, cinpacket_decode4, cinpacket_decode_buf, cinpacket_decode_str, coutpacket_encode1, coutpacket_encode2, coutpacket_encode4, coutpacket_encode_buf, coutpacket_encode_str, CInPacket, COutPacket, CinpacketDecode1, CinpacketDecode2, CinpacketDecode4, CinpacketDecodeBuf, CinpacketDecodeStr, CoutpacketEncode1, CoutpacketEncode2, CoutpacketEncode4, CoutpacketEncodeBuf, CoutpacketEncodeStr
-    }, ztl::zxstr::ZXString8},
+    config::{PacketTracingData, CONFIG},
+    hook_list, lazy_hook, ret_addr,
+    shroom_ffi::{
+        addr,
+        socket::{
+            cclientsocket_process_packet, cclientsocket_send_packet, cinpacket_decode1,
+            cinpacket_decode2, cinpacket_decode4, cinpacket_decode_buf, cinpacket_decode_str,
+            coutpacket_encode1, coutpacket_encode2, coutpacket_encode4, coutpacket_encode_buf,
+            coutpacket_encode_str, send_packet_trampoline, CClientSocket, CInPacket, COutPacket,
+            CclientsocketProcessPacket, CclientsocketSendPacket, CinpacketDecode1,
+            CinpacketDecode2, CinpacketDecode4, CinpacketDecodeBuf, CinpacketDecodeStr,
+            CoutpacketEncode1, CoutpacketEncode2, CoutpacketEncode4, CoutpacketEncodeBuf,
+            CoutpacketEncodeStr,
+        },
+        ztl::zxstr::ZXString8,
+    },
     util::{
-        hooks::{HookModule, LazyHook},
+        hooks::LazyHook,
         packet_schema::{PacketStructElem, PacketStructLogger, ShroomPacket},
     },
 };
 
-static SEND_CTX: LazyLock<Mutex<PacketStructLogger<COutPacket>>> =
-    LazyLock::new(|| Mutex::new(PacketStructLogger::new("send_packet")));
+pub fn tracing_data() -> &'static PacketTracingData {
+    CONFIG.get().unwrap().packet_tracing.as_ref().unwrap()
+}
 
-static RECV_CTX: LazyLock<Mutex<PacketStructLogger<CInPacket>>> =
-    LazyLock::new(|| Mutex::new(PacketStructLogger::new("recv_packet")));
+static SEND_CTX: LazyLock<Mutex<PacketStructLogger<COutPacket>>> = LazyLock::new(|| {
+    Mutex::new(PacketStructLogger::new(
+        tracing_data().send_file.clone(),
+        tracing_data().log_data,
+    ))
+});
+
+static RECV_CTX: LazyLock<Mutex<PacketStructLogger<CInPacket>>> = LazyLock::new(|| {
+    Mutex::new(PacketStructLogger::new(
+        tracing_data().recv_file.clone(),
+        tracing_data().log_data,
+    ))
+});
 
 macro_rules! add_send_elem {
     ($pkt:ident, $v:ident) => {
@@ -73,10 +97,34 @@ unsafe extern "thiscall" fn coutpacket_encode_str_hook(this: *mut COutPacket, v:
 
 static COUTPACKET_ENCODE_BUF_HOOK: LazyHook<CoutpacketEncodeBuf> =
     lazy_hook!(coutpacket_encode_buf, coutpacket_encode_buf_hook);
-unsafe extern "thiscall" fn coutpacket_encode_buf_hook(this: *mut COutPacket, p: *const c_void, len: c_uint) {
+unsafe extern "thiscall" fn coutpacket_encode_buf_hook(
+    this: *mut COutPacket,
+    p: *const c_void,
+    len: c_uint,
+) {
     let slice = std::slice::from_raw_parts(p as *const u8, len as usize);
     add_send_elem!(this, slice);
     COUTPACKET_ENCODE_BUF_HOOK.call(this, p, len)
+}
+
+static CCLIENTSOCKET_SEND_PACKET_HOOK: LazyHook<CclientsocketSendPacket> =
+    lazy_hook!(cclientsocket_send_packet, cclientsocket_send_packet_hook);
+
+unsafe extern "thiscall" fn cclientsocket_send_packet_hook(
+    this: *mut CClientSocket,
+    pkt: *mut COutPacket,
+) {
+    let ret = ret_addr!();
+    SEND_CTX
+        .lock()
+        .expect("send")
+        .finish_send(ret, pkt.as_ref().unwrap());
+
+    if addr::SEND_PACKET_RET_SPOOF {
+        send_packet_trampoline(this, pkt);
+    } else {
+        CCLIENTSOCKET_SEND_PACKET_HOOK.call(this, pkt);
+    }
 }
 
 static CINPACKET_DECODE1_HOOK: LazyHook<CinpacketDecode1> =
@@ -105,40 +153,60 @@ unsafe extern "thiscall" fn cinpacket_decode4_hook(this: *mut CInPacket) -> c_ui
 
 static CINPACKET_DECODE_STR_HOOK: LazyHook<CinpacketDecodeStr> =
     lazy_hook!(cinpacket_decode_str, cinpacket_decode_str_hook);
-unsafe extern "thiscall" fn cinpacket_decode_str_hook(this: *mut CInPacket, out: *mut ZXString8) -> ZXString8 {
+unsafe extern "thiscall" fn cinpacket_decode_str_hook(
+    this: *mut CInPacket,
+    out: *mut ZXString8,
+) -> ZXString8 {
     let v = CINPACKET_DECODE_STR_HOOK.call(this, out);
-    let v_ref  = &v;
+    let v_ref = &v;
     add_recv_elem!(this, v_ref);
     v
 }
 
 static CINPACKET_DECODE_BUF_HOOK: LazyHook<CinpacketDecodeBuf> =
     lazy_hook!(cinpacket_decode_buf, cinpacket_decode_buf_hook);
-unsafe extern "thiscall" fn cinpacket_decode_buf_hook(this: *mut CInPacket, p: *mut c_void, len: c_uint) {
+unsafe extern "thiscall" fn cinpacket_decode_buf_hook(
+    this: *mut CInPacket,
+    p: *mut c_void,
+    len: c_uint,
+) {
     CINPACKET_DECODE_BUF_HOOK.call(this, p, len);
     let slice = std::slice::from_raw_parts(p as *const u8, len as usize);
     add_recv_elem!(this, slice);
 }
 
-pub struct PacketHooks;
-impl HookModule for PacketHooks {
-    unsafe fn enable(&self) -> anyhow::Result<()> {
-        COUTPACKET_ENCODE1_HOOK.enable()?;
-        COUTPACKET_ENCODE2_HOOK.enable()?;
-        COUTPACKET_ENCODE4_HOOK.enable()?;
-        COUTPACKET_ENCODE_STR_HOOK.enable()?;
-        COUTPACKET_ENCODE_BUF_HOOK.enable()?;
+static CCLIENTSOCKET_PROCESS_PACKET_HOOK: LazyHook<CclientsocketProcessPacket> = lazy_hook!(
+    cclientsocket_process_packet,
+    cclientsocket_process_packet_hook
+);
 
-        CINPACKET_DECODE1_HOOK.enable()?;
-        CINPACKET_DECODE2_HOOK.enable()?;
-        CINPACKET_DECODE4_HOOK.enable()?;
-        CINPACKET_DECODE_STR_HOOK.enable()?;
-        CINPACKET_DECODE_BUF_HOOK.enable()?;
-        Ok(())
-    }
-
-    unsafe fn disable(&self) -> anyhow::Result<()> {
-        COUTPACKET_ENCODE1_HOOK.disable()?;
-        Ok(())
-    }
+unsafe extern "thiscall" fn cclientsocket_process_packet_hook(
+    this: *mut CClientSocket,
+    pkt: *mut CInPacket,
+) {
+    RECV_CTX
+        .lock()
+        .expect("recv")
+        .set_packet_data(pkt.as_ref().unwrap());
+    CCLIENTSOCKET_PROCESS_PACKET_HOOK.call(this, pkt);
+    RECV_CTX
+        .lock()
+        .expect("recv")
+        .finish_process(pkt.as_ref().unwrap());
 }
+
+hook_list!(
+    PacketHooks,
+    CINPACKET_DECODE1_HOOK,
+    CINPACKET_DECODE2_HOOK,
+    CINPACKET_DECODE4_HOOK,
+    CINPACKET_DECODE_STR_HOOK,
+    CINPACKET_DECODE_BUF_HOOK,
+    CCLIENTSOCKET_PROCESS_PACKET_HOOK,
+    COUTPACKET_ENCODE1_HOOK,
+    COUTPACKET_ENCODE2_HOOK,
+    COUTPACKET_ENCODE4_HOOK,
+    COUTPACKET_ENCODE_STR_HOOK,
+    COUTPACKET_ENCODE_BUF_HOOK,
+    CCLIENTSOCKET_SEND_PACKET_HOOK,
+);

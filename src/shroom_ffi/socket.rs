@@ -5,7 +5,7 @@ use crate::fn_ref;
 use super::{addr, ztl::{zxarr::ZArray, zxstr::ZXString8}};
 
 #[derive(Debug)]
-#[repr(C, packed)]
+#[repr(C)]
 pub struct COutPacket {
     pub is_loopback: c_int,
     pub send_buf: ZArray<c_uchar>,
@@ -49,7 +49,11 @@ fn_ref!(
     addr::COUTPACKET_ENCODE_BUF,
     unsafe extern "thiscall" fn(*mut COutPacket, *const c_void, c_uint)
 );
-
+fn_ref!(
+    coutpacket_make_buffer_list,
+    addr::COUTPACKET_MAKE_BUFFER_LIST,
+    unsafe extern "thiscall" fn(*mut COutPacket, *const c_void, c_ushort, *mut c_uint, c_int, c_uint)
+);
 
 fn_ref!(
     cinpacket_decode1,
@@ -92,6 +96,8 @@ fn_ref!(
     unsafe extern "thiscall" fn(*mut CClientSocket, *mut CInPacket)
 );
 
+const SEND_PACKET_TRAMPOLINE_ENTRY: usize  = addr::CCLIENTSOCKET_SEND_PACKET + 5;
+
 #[naked]
 pub(crate) unsafe extern "fastcall" fn send_packet_trampoline(this: *mut CClientSocket, pkt: *mut COutPacket) {
     unsafe {
@@ -107,7 +113,7 @@ pub(crate) unsafe extern "fastcall" fn send_packet_trampoline(this: *mut CClient
             // Load address for jump
             "mov eax, {0}",
             "jmp eax",
-            const addr::CCLIENTSOCKET_SEND_PACKET + 5,
+            const SEND_PACKET_TRAMPOLINE_ENTRY,
             const addr::SOCKET_SINGLETON_SEND_PACKET_RET,
             options(noreturn)
         );

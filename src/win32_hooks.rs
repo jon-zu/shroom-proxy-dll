@@ -1,21 +1,20 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    ffi::c_void,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use retour::GenericDetour;
 use windows::{
     core::{s, w, PCSTR},
     Win32::{
-        Foundation::{BOOL, HANDLE},
+        Foundation::{BOOL, HANDLE, HINSTANCE, HWND},
         Security::SECURITY_ATTRIBUTES,
         Storage::FileSystem::WIN32_FIND_DATAA,
+        UI::WindowsAndMessaging::{HMENU, WINDOW_EX_STYLE, WINDOW_STYLE},
     },
 };
 
-use crate::{
-    static_win32_fn_hook,
-    util::{hooks::HookModule, ref_time::RefTime},
-};
-
-pub struct Win32Hooks;
+use crate::{config::CONFIG, hook_list, static_win32_fn_hook, util::ref_time::RefTime};
 
 // This hook prevents that the client detects that there's a dinput8.dll in the clients directory
 static_win32_fn_hook!(
@@ -76,6 +75,64 @@ extern "system" fn create_mutex_a_detour(
     CREATE_MUTEX_A_HOOK.call(lpmutexattributes, binitialowner, name)
 }
 
+static_win32_fn_hook!(
+    CREATE_WINDOW_EX_A_HOOK,
+    w!("user32.dll"),
+    s!("CreateWindowExA"),
+    create_window_ex_a_hook,
+    type FnCreateWindowExA = extern "system" fn(
+        WINDOW_EX_STYLE,
+        PCSTR,
+        PCSTR,
+        WINDOW_STYLE,
+        i32,
+        i32,
+        i32,
+        i32,
+        HWND,
+        HMENU,
+        HINSTANCE,
+        *const c_void,
+    ) -> HANDLE
+);
+
+extern "system" fn create_window_ex_a_hook(
+    dwexstyle: WINDOW_EX_STYLE,
+    lpclassname: PCSTR,
+    mut lpwindowname: PCSTR,
+    dwstyle: WINDOW_STYLE,
+    x: i32,
+    y: i32,
+    nwidth: i32,
+    nheight: i32,
+    hwndparent: HWND,
+    hmenu: HMENU,
+    hinstance: HINSTANCE,
+    lpparam: *const c_void,
+) -> HANDLE {
+    log::info!("Spoofing window title");
+    let mut wnd_title = CONFIG.get().unwrap().window_title();
+    lpwindowname = match wnd_title {
+        Some(ref mut name) => PCSTR::from_raw(name.as_ptr() as *const u8),
+        None => lpwindowname,
+    };
+
+    CREATE_WINDOW_EX_A_HOOK.call(
+        dwexstyle,
+        lpclassname,
+        lpwindowname,
+        dwstyle,
+        x,
+        y,
+        nwidth,
+        nheight,
+        hwndparent,
+        hmenu,
+        hinstance,
+        lpparam,
+    )
+}
+
 // Hook the time counters to let them start at 0
 static_win32_fn_hook!(
     GET_TICK_COUNT_HOOK,
@@ -105,20 +162,11 @@ extern "system" fn time_get_time_hook() -> u32 {
     REF_TICKS.get_time(orig)
 }
 
-impl HookModule for Win32Hooks {
-    unsafe fn enable(&self) -> anyhow::Result<()> {
-        FIND_FIRST_FILE_A_HOOK.enable()?;
-        CREATE_MUTEX_A_HOOK.enable()?;
-        //GET_TICK_COUNT_HOOK.enable()?;
-        //TIME_GET_TIME_HOOK.enable()?;
-        Ok(())
-    }
-
-    unsafe fn disable(&self) -> anyhow::Result<()> {
-        FIND_FIRST_FILE_A_HOOK.disable()?;
-        CREATE_MUTEX_A_HOOK.disable()?;
-        GET_TICK_COUNT_HOOK.disable()?;
-        TIME_GET_TIME_HOOK.disable()?;
-        Ok(())
-    }
-}
+hook_list!(
+    Win32Hooks,
+    FIND_FIRST_FILE_A_HOOK,
+    CREATE_MUTEX_A_HOOK,
+    GET_TICK_COUNT_HOOK,
+    TIME_GET_TIME_HOOK,
+    CREATE_WINDOW_EX_A_HOOK,
+);

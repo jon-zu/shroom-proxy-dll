@@ -5,9 +5,9 @@ use std::{
 
 use crate::{
     config::{AutoLoginData, CONFIG},
-    lazy_hook,
+    hook_list, lazy_hook,
     shroom_ffi::{self, CLogin},
-    util::hooks::{HookModule, LazyHook},
+    util::hooks::LazyHook,
 };
 
 fn get_auto_login() -> &'static Option<AutoLoginData> {
@@ -46,13 +46,12 @@ unsafe extern "thiscall" fn clogin_on_recommend_world_message_hook(
 ) {
     log::info!("On recommended world");
     CLOGIN_ON_RECOMMENDED_WORLD_MESSAGE_HOOK.call(this, pkt);
-    if let Some(auto_login) = get_auto_login() {
-        log::info!("Selecting world: {} - channel: {}", auto_login.world, auto_login.channel);
-        shroom_ffi::clogin_send_login_packet(
-            this,
-            auto_login.world as i32,
-            auto_login.channel as i32,
-        );
+    if let Some((world, channel)) = get_auto_login()
+        .as_ref()
+        .and_then(|a| a.get_world_channel())
+    {
+        log::info!("Selecting world: {world} - channel: {channel}");
+        shroom_ffi::clogin_send_login_packet(this, world as i32, channel as i32);
         CLOGIN_INSTANCE.store(this as *mut CLogin, std::sync::atomic::Ordering::SeqCst);
     }
 }
@@ -66,8 +65,8 @@ unsafe extern "thiscall" fn cuiavatar_select_character_hook(
     this: *const shroom_ffi::CUIAvatar,
     idx: c_int,
 ) {
-    if let Some(auto_login) = get_auto_login() {
-        CUIAVATAR_SELECT_CHARACTER_HOOK.call(this, auto_login.char_index as i32);
+    if let Some(char_index) = get_auto_login().as_ref().and_then(|a| a.char_index) {
+        CUIAVATAR_SELECT_CHARACTER_HOOK.call(this, char_index as i32);
         let login_instance = CLOGIN_INSTANCE.load(std::sync::atomic::Ordering::SeqCst);
         shroom_ffi::clogin_send_select_character_packet(login_instance);
     } else {
@@ -75,20 +74,9 @@ unsafe extern "thiscall" fn cuiavatar_select_character_hook(
     }
 }
 
-pub struct LoginHooks;
-
-impl HookModule for LoginHooks {
-    unsafe fn enable(&self) -> anyhow::Result<()> {
-        CLOGIN_INIT_HOOK.enable()?;
-        CLOGIN_ON_RECOMMENDED_WORLD_MESSAGE_HOOK.enable()?;
-        CUIAVATAR_SELECT_CHARACTER_HOOK.enable()?;
-        Ok(())
-    }
-
-    unsafe fn disable(&self) -> anyhow::Result<()> {
-        CLOGIN_INIT_HOOK.disable()?;
-        CLOGIN_ON_RECOMMENDED_WORLD_MESSAGE_HOOK.disable()?;
-        CUIAVATAR_SELECT_CHARACTER_HOOK.disable()?;
-        Ok(())
-    }
-}
+hook_list!(
+    LoginHooks,
+    CLOGIN_INIT_HOOK,
+    CLOGIN_ON_RECOMMENDED_WORLD_MESSAGE_HOOK,
+    CUIAVATAR_SELECT_CHARACTER_HOOK,
+);

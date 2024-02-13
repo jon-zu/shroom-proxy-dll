@@ -67,6 +67,7 @@ chrono = "0.4"
 static_assertions = "1"
 win_dbg_logger = "0.1.0"
 num_enum = "0.7.2"
+toml = "0.8.10"
 #tokio-websockets = { version = "0.5", features = [
 #  "client",
 #  "getrandom",

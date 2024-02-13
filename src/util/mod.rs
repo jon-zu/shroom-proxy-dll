@@ -24,7 +24,7 @@ macro_rules! ret_addr {
     () => {
         unsafe { $crate::util::return_address(0) as usize }
     };
-    (level: $level:expr) => {
+    ($level:expr) => {
         unsafe { $crate::util::return_address($level) as usize }
     };
 }

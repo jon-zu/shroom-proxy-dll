@@ -40,11 +40,11 @@ impl ShroomPacket for COutPacket {
     }
 
     fn len(&self) -> usize {
-        self.send_buf.len()
+        self.offset as usize
     }
 
     fn offset(&self) -> usize {
-        0
+        self.offset as usize
     }
 }
 
@@ -120,12 +120,12 @@ impl PacketStructElem {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub fn byte_len(&self) -> usize {
         match self.ty {
             PacketStructTy::I8 => 1,
             PacketStructTy::I16 => 2,
             PacketStructTy::I32 => 4,
-            PacketStructTy::Buf(ln) | PacketStructTy::Str(ln) => ln as usize + 2 + 1,
+            PacketStructTy::Buf(ln) | PacketStructTy::Str(ln) => ln as usize + 2,
         }
     }
 }
@@ -166,7 +166,7 @@ impl PacketStruct {
 
     pub fn add_elem(&mut self, elem: PacketStructElem) {
         self.handle_gap(elem.offset);
-        self.last_known_offset = elem.offset + elem.len();
+        self.last_known_offset = elem.offset + elem.byte_len();
         self.elements.push(elem);
     }
 }
@@ -179,9 +179,11 @@ pub struct PacketStructLog<'a> {
 
 #[derive(Debug)]
 pub struct PacketStructLogger<P> {
-    data_ptr: *mut c_uchar,
+    data_ptr: *mut u8,
+    data_size_hint: Option<usize>,
     out_file: BufWriter<File>,
     cur: PacketStruct,
+    with_data: bool,
     _p: PhantomData<P>,
 }
 
@@ -191,24 +193,28 @@ unsafe impl<P> Sync for PacketStructLogger<P> {}
 
 
 impl<P: ShroomPacket> PacketStructLogger<P> {
-    pub fn new(path: impl AsRef<Path>) -> Self {
+    pub fn new(path: impl AsRef<Path>, with_data: bool) -> Self {
         let out_file = BufWriter::new(File::create(path).unwrap());
 
         Self {
             cur: Default::default(),
             data_ptr: null_mut(),
+            data_size_hint: None,
             out_file,
+            with_data,
             _p: PhantomData,
         }
     }
 
     pub fn clear(&mut self) {
         self.data_ptr = null_mut();
+        self.data_size_hint = None;
         self.cur = Default::default();
     }
 
     pub fn set_packet_data(&mut self, pkt_ptr: &P) {
-        self.data_ptr = pkt_ptr.raw_data().data().as_ptr() as *mut c_uchar;
+        self.data_ptr = pkt_ptr.raw_data().as_ptr();
+        self.data_size_hint = Some(pkt_ptr.len());
     }
 
     pub fn add_elem(&mut self, elem: PacketStructElem) {
@@ -218,6 +224,12 @@ impl<P: ShroomPacket> PacketStructLogger<P> {
     fn finish_inner(&mut self) {
         let strct = std::mem::replace(&mut self.cur, Default::default());
         self.write_to_file(strct).unwrap();
+        self.clear();
+    }
+
+    pub fn finish_process(&mut self, p: &P) {
+        self.set_packet_data(p);
+        self.finish_inner();
     }
 
     pub fn finish_incomplete(&mut self, exception_ret_addr: usize) {
@@ -225,24 +237,26 @@ impl<P: ShroomPacket> PacketStructLogger<P> {
         self.finish_inner();
     }
 
-    pub fn finish(&mut self, send_ret_addr: usize) {
+    pub fn finish_send(&mut self, send_ret_addr: usize, p: &P) {
+        self.set_packet_data(p);
         self.cur.send_ret_addr = Some(send_ret_addr);
         self.finish_inner();
     }
 
+
     pub fn write_to_file(&mut self, strct: PacketStruct) -> anyhow::Result<()> {
-        let data: ZArray<c_uchar> = if self.data_ptr.is_null() {
+        let data: ZArray<c_uchar> = if !self.data_ptr.is_null() {
             unsafe { ZArray::from_ptr(self.data_ptr) }
         } else {
             ZArray::empty()
         };
 
-        let data = if data.len() > P::DATA_OFFSET {
-            Some(&data.data()[P::DATA_OFFSET..])
+        let len = self.data_size_hint.unwrap_or_else(|| data.len());
+        let data = if self.with_data && data.len() > P::DATA_OFFSET {
+            Some(&data.data()[P::DATA_OFFSET..P::DATA_OFFSET + len])
         } else {
             None
         };
-
 
         serde_json::to_writer(&mut self.out_file, &PacketStructLog { strct, data })?;
         writeln!(&mut self.out_file, ",")?;
@@ -250,16 +264,4 @@ impl<P: ShroomPacket> PacketStructLogger<P> {
 
         Ok(())
     }
-
-    /*
-    /// Last resort flush when application is about to terminate
-    pub fn flush(&self, packet_ptr: usize) -> anyhow::Result<()> {
-        let pkt = self.cur.lock().expect("packets").remove(&packet_ptr);
-        if let Some(pkt) = pkt {
-            //TODO: maybe try to resolve pointer to the packet and get the data
-            self.write_to_file(pkt, None)?;
-        }
-
-        Ok(())
-    }*/
 }

@@ -1,5 +1,39 @@
 use serde::{Deserialize, Serialize};
+use windows::core::PCSTR;
 use std::{ffi::CString, fmt::Write, sync::OnceLock};
+
+#[derive(Debug)]
+pub struct Str(pub CString);
+
+impl Str {
+    pub fn new(s: &str) -> Self {
+        Self(CString::new(s).expect("cstr"))
+    }   
+
+    pub fn as_pcstr(&self) -> PCSTR {
+        PCSTR(self.0.as_ptr() as *const u8)
+    }
+}
+
+impl<'de> Deserialize<'de> for Str {
+    fn deserialize<D>(deserializer: D) -> Result<Str, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Str(CString::new(s).map_err(serde::de::Error::custom)?))
+    }
+}
+
+impl Serialize for Str {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.to_str().map_err(serde::ser::Error::custom)?.serialize(serializer)
+    }
+}
+
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum LogBackend {
@@ -11,8 +45,8 @@ pub enum LogBackend {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AutoLoginData {
-    pub username: CString,
-    pub password: CString,
+    pub username: Str,
+    pub password: Str,
     pub world: Option<u32>,
     pub channel: Option<u32>,
     pub char_index: Option<u32>,
@@ -43,11 +77,12 @@ pub struct Config {
     pub log_backend: LogBackend,
     pub skip_logo: bool,
     pub log_msgbox: bool,
-    pub pdb_file: Option<CString>,
+    pub pdb_file: Option<Str>,
     pub auto_login_data: Option<AutoLoginData>,
     pub window_data: Option<WindowData>,
     pub packet_tracing: Option<PacketTracingData>,
     pub multi_jump: Option<usize>,
+    pub extra_dlls: Vec<Str>
 }
 
 impl Config {
@@ -72,10 +107,10 @@ impl Default for Config {
             log_backend: LogBackend::Console,
             skip_logo: true,
             log_msgbox: false,
-            pdb_file: Some(CString::new("MapleStory.pdb").unwrap()),
+            pdb_file: Some(Str::new("MapleStory.pdb")),
             auto_login_data: Some(AutoLoginData {
-                username: CString::new("admin").unwrap(),
-                password: CString::new("test1234").unwrap(),
+                username: Str::new("admin"),
+                password: Str::new("test1234"),
                 world: Some(0),
                 channel: Some(0),
                 char_index: Some(0),
@@ -90,9 +125,27 @@ impl Default for Config {
                 recv_file: "recv_packets.txt".to_string(),
                 log_data: false,
             }),
-            multi_jump: Some(3)
+            multi_jump: Some(3),
+            extra_dlls: Vec::default()
         }
     }
 }
 
 pub static CONFIG: OnceLock<Config> = OnceLock::new();
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn gen_default_config() {
+        let toml = toml::to_string_pretty(&Config::default()).unwrap();
+        std::fs::write("config.toml", toml).unwrap();
+    }
+
+    #[test]
+    fn config() {
+        gen_default_config();
+        toml::from_str::<Config>(&std::fs::read_to_string("config.toml").unwrap()).unwrap();        
+    }
+}

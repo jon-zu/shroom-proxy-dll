@@ -214,7 +214,7 @@ fn load_init_sym(sw: &StackWalker) -> windows::core::Result<()> {
     sw.sym_init()?;
     let cfg = CONFIG.get().unwrap();
     if let Some(ref pdb_file) = cfg.pdb_file {
-        sw.sym_load_main_pdb(windows::core::PCSTR(pdb_file.as_ptr() as *const u8))?;
+        sw.sym_load_main_pdb(pdb_file.as_pcstr())?;
     }
     Ok(())
 }

@@ -27,8 +27,8 @@ unsafe extern "thiscall" fn clogin_init_hook(
     if let Some(auto_login) = get_auto_login() {
         shroom_ffi::clogin_send_check_password_packet(
             this,
-            windows::core::PCSTR(auto_login.username.as_ptr() as *const u8),
-            windows::core::PCSTR(auto_login.password.as_ptr() as *const u8),
+            auto_login.username.as_pcstr(),
+            auto_login.password.as_pcstr()
         );
     }
 }
@@ -46,13 +46,13 @@ unsafe extern "thiscall" fn clogin_on_recommend_world_message_hook(
 ) {
     log::info!("On recommended world");
     CLOGIN_ON_RECOMMENDED_WORLD_MESSAGE_HOOK.call(this, pkt);
+    CLOGIN_INSTANCE.store(this as *mut CLogin, std::sync::atomic::Ordering::SeqCst);
     if let Some((world, channel)) = get_auto_login()
         .as_ref()
         .and_then(|a| a.get_world_channel())
     {
         log::info!("Selecting world: {world} - channel: {channel}");
         shroom_ffi::clogin_send_login_packet(this, world as i32, channel as i32);
-        CLOGIN_INSTANCE.store(this as *mut CLogin, std::sync::atomic::Ordering::SeqCst);
     }
 }
 

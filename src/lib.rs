@@ -26,7 +26,7 @@ use windows::{
         Foundation::{BOOL, HMODULE},
         System::{
             Console::AllocConsole,
-            LibraryLoader::GetProcAddress,
+            LibraryLoader::{GetProcAddress, LoadLibraryA},
             SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH},
         },
     },
@@ -101,6 +101,7 @@ fn setup_logs(backend: &LogBackend) -> anyhow::Result<()> {
     Ok(())
 }
 
+
 fn run() {
     // Init the overlay If It's required
     #[cfg(feature = "overlay")]
@@ -111,6 +112,12 @@ fn run() {
 
     unsafe { LoginHooks.enable_if(cfg.auto_login_data.is_some()) }.expect("Login hooks");
     unsafe { PacketHooks.enable_if(cfg.packet_tracing.is_some()) }.expect("Packet hooks");
+
+    for extra_dll in &cfg.extra_dlls {
+        if let Err(err) = unsafe { LoadLibraryA(extra_dll.as_pcstr()) } {
+            log::error!("Failed to load extra dll: {:?} - {:?}", extra_dll, err);
+        }
+    }
 }
 
 fn load_cfg() -> anyhow::Result<config::Config> {

@@ -1,0 +1,23 @@
+log_backend = "Console"
+skip_logo = true
+log_msgbox = false
+pdb_file = "MapleStory.pdb"
+multi_jump = 3
+extra_dlls = []
+
+[auto_login_data]
+username = "admin"
+password = "test1234"
+world = 0
+channel = 0
+char_index = 0
+
+[window_data]
+name = "DinputStory"
+pid = true
+time = true
+
+[packet_tracing]
+send_file = "send_packets.txt"
+recv_file = "recv_packets.txt"
+log_data = false

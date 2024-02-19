@@ -82,7 +82,8 @@ pub struct Config {
     pub window_data: Option<WindowData>,
     pub packet_tracing: Option<PacketTracingData>,
     pub multi_jump: Option<usize>,
-    pub extra_dlls: Vec<Str>
+    pub extra_dlls: Vec<Str>,
+    pub disable_shanda: bool,
 }
 
 impl Config {
@@ -104,7 +105,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            log_backend: LogBackend::Console,
+            log_backend: LogBackend::Console, //LogBackend::File("shroom.log".to_string()),
             skip_logo: true,
             log_msgbox: false,
             pdb_file: Some(Str::new("MapleStory.pdb")),
@@ -120,13 +121,15 @@ impl Default for Config {
                 pid: true,
                 time: true,
             }),
-            packet_tracing: Some(PacketTracingData {
+           /*  packet_tracing: Some(PacketTracingData {
                 send_file: "send_packets.txt".to_string(),
                 recv_file: "recv_packets.txt".to_string(),
                 log_data: false,
-            }),
-            multi_jump: Some(3),
-            extra_dlls: Vec::default()
+            }),*/
+            packet_tracing: None,
+            multi_jump: Some(2),
+            extra_dlls: Vec::default(),
+            disable_shanda: true,
         }
     }
 }

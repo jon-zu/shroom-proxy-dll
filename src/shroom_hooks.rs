@@ -1,5 +1,5 @@
 use std::{
-    ffi::{c_int, c_void},
+    ffi::{c_char, c_int, c_uchar, c_void},
     time::Instant,
 };
 
@@ -8,7 +8,7 @@ use crossbeam::atomic::AtomicCell;
 use crate::{
     config::CONFIG,
     hook_list, lazy_hook,
-    shroom_ffi::{self, ztl::zxstr::ZXString8, CvecCtrlIsSwimming, CvecCtrlJustJump},
+    shroom_ffi::{self, ztl::zxstr::ZXString8, CiobufferManipulatorDe, CiobufferManipulatorEn, CvecCtrlIsSwimming, CvecCtrlJustJump},
     util::hooks::{HookModule, LazyHook},
 };
 
@@ -89,6 +89,30 @@ hook_list!(
     CVEC_CTRL_IS_SWIMMING_HOOK,
 );
 
+static CIOBUFFER_MANIPULATOR_EN_HOOK: LazyHook<CiobufferManipulatorEn> = lazy_hook!(
+    shroom_ffi::ciobuffer_manipulator_en,
+    ciobuffer_manipulator_en_hook
+);
+
+unsafe extern "stdcall" fn ciobuffer_manipulator_en_hook(buf: *mut c_char, ln: c_int) -> c_uchar {
+    1
+}
+
+static CIOBUFFER_MANIPULATOR_DE_HOOK: LazyHook<CiobufferManipulatorDe> = lazy_hook!(
+    shroom_ffi::ciobuffer_manipulator_de,
+    ciobuffer_manipulator_de_hook
+);
+
+unsafe extern "stdcall" fn ciobuffer_manipulator_de_hook(buf: *mut c_char, ln: c_int) -> c_uchar {
+    1
+}
+
+hook_list!(
+    ShandaHooks,
+    CIOBUFFER_MANIPULATOR_EN_HOOK,
+    CIOBUFFER_MANIPULATOR_DE_HOOK,
+);
+
 pub struct ShroomHooks;
 
 impl HookModule for ShroomHooks {
@@ -98,6 +122,10 @@ impl HookModule for ShroomHooks {
         CMSGBOX_HOOK.enable_if(cfg.log_msgbox)?;
         CWVS_APP_INITIALIZE_GAME_DATA_HOOK.enable()?;
         JumpHooks.enable_if(cfg.multi_jump.is_some())?;
+        log::info!("Disabling shanda: {}", cfg.disable_shanda);
+        ShandaHooks.enable_if(cfg.disable_shanda)?;
+
+
         Ok(())
     }
 
@@ -107,6 +135,7 @@ impl HookModule for ShroomHooks {
         CMSGBOX_HOOK.disable_if(cfg.log_msgbox)?;
         CWVS_APP_INITIALIZE_GAME_DATA_HOOK.disable()?;
         JumpHooks.enable_if(cfg.multi_jump.is_some())?;
+        ShandaHooks.enable_if(cfg.disable_shanda)?;
         Ok(())
     }
 }

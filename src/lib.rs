@@ -101,7 +101,6 @@ fn setup_logs(backend: &LogBackend) -> anyhow::Result<()> {
     Ok(())
 }
 
-
 fn run() {
     // Init the overlay If It's required
     #[cfg(feature = "overlay")]
@@ -122,34 +121,37 @@ fn run() {
 
 fn load_cfg() -> anyhow::Result<config::Config> {
     let cfg_path = std::env::var("SHROOM_CONFIG").unwrap_or("config.toml".to_string());
-    let file = std::fs::read_to_string(&cfg_path)?;
+    let file = std::fs::read_to_string(&cfg_path).context("Reading config file failed")?;
     Ok(toml::from_str(&file)?)
 }
 
 fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
-    let mut load_failed = false;
-    let cfg = CONFIG.get_or_init(|| match load_cfg() {
-        Ok(cfg) => cfg,
-        Err(_) => {
-            load_failed = true;
-            config::Config::default()
+    match load_cfg() {
+        Ok(cfg) => {
+            let cfg = CONFIG.get_or_init(|| cfg);
+
+            // Setup the logger as console
+            setup_logs(&cfg.log_backend)?;
+        },
+        Err(err) => {
+            let cfg = config::Config::default();
+            let cfg  = CONFIG.get_or_init(|| cfg);
+
+            // Setup the logger as console
+            setup_logs(&cfg.log_backend)?;
+            log::error!("Failed to load config: {:?} - Using default config", err);
+
         }
-    });
+    }
     MODULE.store(hmodule);
 
-    // Setup the logger as console
-    setup_logs(&cfg.log_backend)?;
-
-    log::info!("Started");
-    if load_failed {
-        log::warn!("Failed to load config, using default");
-    }
-
     // Load the system dinput8.dll
-    let dinput8_lib = util::load_sys_dll(w!("dinput8.dll"))?;
+    log::info!("Loading proxy dll");
+    let dinput8_lib = util::load_sys_dll("dinput8.dll")?;
     let dinput8_create = unsafe { GetProcAddress(dinput8_lib, s!("DirectInput8Create")) }
         .context("Failed to get DirectInput8Create")?;
     DINPUT8_CREATE.store(unsafe { std::mem::transmute(dinput8_create) });
+    log::info!("Loaded proxy dll");
 
     // Do the win32 patches
     unsafe {

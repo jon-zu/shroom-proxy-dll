@@ -56,11 +56,11 @@ impl ShroomPacket for CInPacket {
     }
 
     fn len(&self) -> usize {
-        self.recv_buf.len() - Self::DATA_OFFSET
+        self.recv_buf.len().checked_sub(Self::DATA_OFFSET).unwrap_or(0)
     }
 
     fn offset(&self) -> usize {
-        self.offset as usize - Self::DATA_OFFSET
+        (self.offset as usize).checked_sub(Self::DATA_OFFSET).unwrap_or(0)
     }
 }
 

@@ -1,4 +1,4 @@
-use std::ffi::{c_int, c_uint, c_void};
+use std::ffi::{c_int, c_uint, c_void, c_char, c_uchar};
 
 use windows::core::PCSTR;
 
@@ -85,6 +85,9 @@ pub mod addr {
     pub const CINPACKET_DECODE4: usize = 0x409870;
     pub const CINPACKET_DECODE_STR: usize = 0x484140;
     pub const CINPACKET_DECODE_BUF: usize = 0x4336a0;
+
+    pub const CIOBUFFER_MANIPULATOR_EN: usize = 0x68c8e0;
+    pub const CIOBUFFER_MANIPULATOR_DE: usize = 0x68cab0;
 
     pub const CUSERLOCAL_JUMP: usize = 0x90a1d0;
     pub const CUSERLOCAL_IS_IMMOVABLE: usize = 0x905430;
@@ -220,4 +223,18 @@ fn_ref!(
     cuiavatar_select_character,
     addr::CUIAVATAR_SELECT_CHARACTER,
     unsafe extern "thiscall" fn(*const CUIAvatar, c_int)
+);
+
+
+fn_ref!(
+    ciobuffer_manipulator_en,
+    addr::CIOBUFFER_MANIPULATOR_EN,
+    unsafe extern "stdcall" fn(*mut c_char, c_int) -> c_uchar
+);
+
+
+fn_ref!(
+    ciobuffer_manipulator_de,
+    addr::CIOBUFFER_MANIPULATOR_DE,
+    unsafe extern "stdcall" fn(*mut c_char, c_int) -> c_uchar
 );

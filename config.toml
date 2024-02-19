@@ -1,9 +1,11 @@
-log_backend = "Console"
 skip_logo = true
 log_msgbox = false
 pdb_file = "MapleStory.pdb"
 multi_jump = 3
 extra_dlls = []
+
+[log_backend]
+File = "shroom.log"
 
 [auto_login_data]
 username = "admin"

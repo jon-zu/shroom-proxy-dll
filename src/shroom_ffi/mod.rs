@@ -19,7 +19,7 @@ pub type CLogo = c_void;
 pub type CLogin = c_void;
 pub type CUIAvatar = c_void;
 pub type CWvsApp = c_void;
-pub type CVecCtrl = c_void;
+pub type CStaticFoothold = c_void;
 
 #[repr(transparent)]
 pub struct Padding<const N: usize>([u8; N]);
@@ -50,6 +50,19 @@ pub struct CUserLocal {
     pub wings_end: c_int,
     pub key_down: c_int,
     pub key_down_scan_code: c_uint,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct CVecCtrl {
+    pub padding: Padding<0x1a0>,
+    pub foothold: *mut CStaticFoothold
+}
+
+impl CVecCtrl {
+    pub fn is_on_foothold(&self) -> bool {
+        !self.foothold.is_null()
+    }
 }
 
 pub mod addr {

@@ -54,20 +54,18 @@ static CVEC_CTRL_JUST_JUMP_HOOK: LazyHook<CvecCtrlJustJump> =
 
 unsafe extern "thiscall" fn cvec_ctrl_just_jump_hook(this: *mut shroom_ffi::CVecCtrl) -> c_int {
     static JUMP_COUNTER: AtomicCell<usize> = AtomicCell::new(0);
-    if CVEC_CTRL_JUST_JUMP_HOOK.call(this) == 1 {
-        JUMP_COUNTER.store(0);
-        return 1;
-    }
 
-    if JUMP_COUNTER.load() < CONFIG.get().unwrap().multi_jump.unwrap_or(1) {
-        JUMP_COUNTER.fetch_add(1);
-        SPOOF_IS_SWIMMING.store(true);
+    if !this.as_ref().unwrap().is_on_foothold() {
+        if JUMP_COUNTER.fetch_add(1) <= CONFIG.get().unwrap().multi_jump.unwrap_or(1) {
+            SPOOF_IS_SWIMMING.store(true);
+        }
         let res = CVEC_CTRL_JUST_JUMP_HOOK.call(this);
         SPOOF_IS_SWIMMING.store(false);
-        res
-    } else {
-        0
+        return res;
     }
+
+    JUMP_COUNTER.store(1);
+    CVEC_CTRL_JUST_JUMP_HOOK.call(this)
 }
 
 static CVEC_CTRL_IS_SWIMMING_HOOK: LazyHook<CvecCtrlIsSwimming> = lazy_hook!(
@@ -122,7 +120,6 @@ impl HookModule for ShroomHooks {
         CMSGBOX_HOOK.enable_if(cfg.log_msgbox)?;
         CWVS_APP_INITIALIZE_GAME_DATA_HOOK.enable()?;
         JumpHooks.enable_if(cfg.multi_jump.is_some())?;
-        log::info!("Disabling shanda: {}", cfg.disable_shanda);
         ShandaHooks.enable_if(cfg.disable_shanda)?;
 
 

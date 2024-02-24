@@ -96,6 +96,12 @@ fn_ref!(
     unsafe extern "thiscall" fn(*mut CClientSocket, *mut CInPacket)
 );
 
+fn_ref!(
+    cclientsocket_manipulate_packet,
+    0x4b0220,
+    unsafe extern "thiscall" fn(*mut CClientSocket)
+);
+
 const SEND_PACKET_TRAMPOLINE_ENTRY: usize  = addr::CCLIENTSOCKET_SEND_PACKET + 5;
 
 #[naked]

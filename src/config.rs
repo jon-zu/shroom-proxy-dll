@@ -84,6 +84,7 @@ pub struct Config {
     pub multi_jump: Option<usize>,
     pub extra_dlls: Vec<Str>,
     pub disable_shanda: bool,
+    pub handle_exceptions: bool
 }
 
 impl Config {
@@ -130,6 +131,7 @@ impl Default for Config {
             multi_jump: Some(2),
             extra_dlls: Vec::default(),
             disable_shanda: true,
+            handle_exceptions: true
         }
     }
 }

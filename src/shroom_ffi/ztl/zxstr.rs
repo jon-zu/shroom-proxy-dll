@@ -8,6 +8,7 @@ pub struct ZXStringHeader {
     byte_len: i32,
 }
 
+#[derive(Debug, Copy, Clone)]
 #[repr(C, packed)]
 pub struct ZXString<T>(pub *const T);
 pub type ZXString8 = ZXString<u8>;
@@ -33,10 +34,10 @@ impl<T> ZXString<T> {
     }
 
     pub fn empty() -> Self {
-        unsafe { Self::from_ptr(ptr::null()) }
+        Self::from_ptr(ptr::null())
     }
 
-    pub unsafe fn from_ptr(ptr: *const T) -> Self {
+    pub fn from_ptr(ptr: *const T) -> Self {
         Self(ptr)
     }
 

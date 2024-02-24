@@ -1,43 +1,49 @@
-use std::ffi::{c_int, c_uint, c_void, c_char, c_uchar};
+use std::ffi::{c_char, c_int, c_uchar, c_uint, c_void};
 
-use windows::core::PCSTR;
+use windows::{
+    core::{HRESULT, PCSTR},
+    Win32::{
+        Foundation::{HANDLE, HWND},
+        UI::WindowsAndMessaging::HHOOK,
+    },
+};
 
 use crate::fn_ref;
 
-pub mod ztl;
-pub mod socket;
 pub mod error_codes;
+pub mod socket;
+pub mod ztl;
 /*pub mod com {
     pub mod iface;
 }
 pub mod client_socket;
 */
 
-use self::ztl::zxstr::ZXString8;
+use self::{
+    socket::CClientSocket,
+    ztl::{zxarr::ZArray, zxstr::ZXString8, TSingleton},
+};
 
 pub type CLogo = c_void;
 pub type CLogin = c_void;
 pub type CUIAvatar = c_void;
-pub type CWvsApp = c_void;
 pub type CStaticFoothold = c_void;
+pub type CInputSystem = c_void;
 
 #[repr(transparent)]
 pub struct Padding<const N: usize>([u8; N]);
 
 impl<const N: usize> std::fmt::Debug for Padding<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Padding")
-            .field("len", &N)
-            .finish()
+        f.debug_struct("Padding").field("len", &N).finish()
     }
 }
-
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct TagPoint {
     pub x: c_int,
-    pub y: c_int
+    pub y: c_int,
 }
 
 #[derive(Debug)]
@@ -56,7 +62,7 @@ pub struct CUserLocal {
 #[repr(C)]
 pub struct CVecCtrl {
     pub padding: Padding<0x1a0>,
-    pub foothold: *mut CStaticFoothold
+    pub foothold: *mut CStaticFoothold,
 }
 
 impl CVecCtrl {
@@ -64,6 +70,46 @@ impl CVecCtrl {
         !self.foothold.is_null()
     }
 }
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct CWvsApp {
+    pub vtable: *const c_void,
+    pub hwnd: HWND,
+    pub pcominitialized: c_int,
+    pub main_thread_id: c_uint,
+    pub hook: *const HHOOK,
+    pub is_win9x: c_int,
+    pub os_version: c_int,
+    pub os_minor_version: c_int,
+    pub osbuild_number: c_int,
+    pub csdversion: ZXString8,
+    pub has_64_bit_info: c_int,
+    pub update_time: c_int,
+    pub first_update: c_int,
+    pub cmd_line: ZXString8,
+    pub game_start_mode: c_int,
+    pub auto_connect: c_int,
+    pub show_ad_balloon: c_int,
+    pub exit_by_title_escape: c_int,
+    pub zexception_code: HRESULT,
+    pub com_error_code: HRESULT,
+    pub security_error_code: c_uint,
+    pub target_version: c_int,
+    pub last_server_ipcheck: c_int,
+    pub last_server_ipcheck2: c_int,
+    pub last_gghooking_apicheck: c_int,
+    pub last_security_check: c_int,
+    pub input_handles: [HANDLE; 3],
+    pub next_security_check: c_int,
+    pub is_enabled_dx9: c_uchar,
+    pub backup_buffer: ZArray<c_uchar>,
+    pub backup_buffer_size: c_uint,
+    pub clear_stack_log: c_uint,
+    pub window_active: c_int,
+}
+
+static_assertions::assert_eq_size!(CWvsApp, [u8; 0x8c]);
 
 pub mod addr {
     pub const CLOGO_INIT: usize = 0x60e240;
@@ -143,7 +189,6 @@ pub mod addr92 {
     pub const CINPACKET_DECODE4: usize = 0x409ca0;
     pub const CINPACKET_DECODE_STR: usize = 0x480b60;
     pub const CINPACKET_DECODE_BUF: usize = 0x4347a0;
-
 
     pub const USE_SEND_PACKET_TRAMPOLINE: bool = false;
 }
@@ -238,16 +283,59 @@ fn_ref!(
     unsafe extern "thiscall" fn(*const CUIAvatar, c_int)
 );
 
-
 fn_ref!(
     ciobuffer_manipulator_en,
     addr::CIOBUFFER_MANIPULATOR_EN,
     unsafe extern "stdcall" fn(*mut c_char, c_int) -> c_uchar
 );
 
-
 fn_ref!(
     ciobuffer_manipulator_de,
     addr::CIOBUFFER_MANIPULATOR_DE,
     unsafe extern "stdcall" fn(*mut c_char, c_int) -> c_uchar
+);
+
+pub static mut CCLIENT_SOCKET_SINGLETON: TSingleton<CClientSocket> =
+    unsafe { std::mem::transmute(0xc64064) };
+
+fn_ref!(
+    cwvs_app_run,
+    0x9c5f00,
+    unsafe extern "thiscall" fn(*mut CWvsApp, *mut c_int)
+);
+
+fn_ref!(
+    cwvs_app_is_msg_proc,
+    0x9c1ce0,
+    unsafe extern "thiscall" fn(*mut CWvsApp, c_uint, c_uint, c_int)
+);
+
+
+fn_ref!(
+    cinput_system_update_device,
+    0x571710,
+    unsafe extern "thiscall" fn(this: *mut CInputSystem, dev_ix: c_int)
+);
+
+pub static mut CINPUT_SYSTEM_SINGLETON: TSingleton<CInputSystem> =
+    unsafe { std::mem::transmute(0xc68c20) };
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct ISMSG {
+    pub msg: c_uint,
+    pub wparam: c_uint,
+    pub lparam: c_int,
+}
+
+fn_ref!(
+    cinput_system_get_is_message,
+    0x5708f0,
+    unsafe extern "thiscall" fn(*mut CInputSystem, msg: *mut ISMSG) -> c_int
+);
+
+fn_ref!(
+    cinput_system_generate_auto_key_down,
+    0x56f990,
+    unsafe extern "thiscall" fn(*mut CInputSystem, msg: *mut ISMSG) -> c_int
 );

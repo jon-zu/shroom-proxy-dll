@@ -1,8 +1,13 @@
-use retour::{GenericDetour, Function};
+use retour::{Function, GenericDetour};
 use windows::{
     core::{PCSTR, PCWSTR},
     Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress},
 };
+
+pub trait FnRef {
+    type Fn: Function;
+    fn get_fn() -> Self::Fn;
+}
 
 #[macro_export]
 macro_rules! fn_ref {
@@ -12,9 +17,17 @@ macro_rules! fn_ref {
             pub const [<$name _addr>]: *const () = $addr as *const ();
             pub type [<$name:camel>] = $($fn_ty)*;
             #[allow(non_upper_case_globals)]
-            pub static $name: std::sync::LazyLock<[<$name:camel>]> = std::sync::LazyLock::new(|| unsafe {
-                std::mem::transmute([<$name _addr>])
-            });
+            pub fn $name() -> [<$name:camel>] {
+                unsafe { std::mem::transmute([<$name _addr>]) }
+            }
+
+            pub struct [<$name:camel Ref>];
+            impl $crate::util::hooks::FnRef for [<$name:camel Ref>] {
+                type Fn = [<$name:camel>];
+                fn get_fn() -> Self::Fn {
+                    $name()
+                }
+            }
         }
     };
 }
@@ -57,8 +70,20 @@ pub type LazyHook<T> = std::sync::LazyLock<GenericDetour<T>>;
 macro_rules! lazy_hook {
     ($target:path, $hook:path) => {
         std::sync::LazyLock::new(move || unsafe {
-            retour::GenericDetour::new(*$target, $hook).unwrap()
+            retour::GenericDetour::new($target(), $hook).unwrap()
         })
+    };
+}
+
+#[macro_export]
+macro_rules! static_lazy_hook {
+    ($name:ident, $target_ty:ty, $hook:path) => {
+        static $name: $crate::util::hooks::LazyHook<
+            <$target_ty as $crate::util::hooks::FnRef>::Fn,
+        > = std::sync::LazyLock::new(move || unsafe {
+            use $crate::util::hooks::FnRef;
+            retour::GenericDetour::new(<$target_ty>::get_fn(), $hook).unwrap()
+        });
     };
 }
 
@@ -105,12 +130,9 @@ macro_rules! hook_list {
     };
 }
 
-
 pub trait HookModule {
     unsafe fn enable(&self) -> anyhow::Result<()>;
     unsafe fn disable(&self) -> anyhow::Result<()>;
-
-
 
     unsafe fn enable_if(&self, cond: bool) -> anyhow::Result<()> {
         if cond {
@@ -127,7 +149,7 @@ pub trait HookModule {
     }
 }
 
-impl<T: Function>  HookModule for GenericDetour<T> {
+impl<T: Function> HookModule for GenericDetour<T> {
     unsafe fn enable(&self) -> anyhow::Result<()> {
         self.enable()?;
         Ok(())

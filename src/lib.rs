@@ -21,7 +21,7 @@ use simplelog::{ColorChoice, Config, TermLogger, TerminalMode, WriteLogger};
 use util::hooks::HookModule;
 use win32_hooks::Win32Hooks;
 use windows::{
-    core::{s, w, IUnknown, GUID, HRESULT},
+    core::{s, IUnknown, GUID, HRESULT},
     Win32::{
         Foundation::{BOOL, HMODULE},
         System::{
@@ -35,6 +35,7 @@ use windows::{
 use crate::{config::CONFIG, login::LoginHooks, socket::PacketHooks};
 
 //pub mod net;
+pub mod app;
 pub mod config;
 pub mod exceptions;
 pub mod login;
@@ -143,6 +144,7 @@ fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
 
         }
     }
+    let cfg = CONFIG.get().unwrap();
     MODULE.store(hmodule);
 
     // Load the system dinput8.dll
@@ -159,7 +161,9 @@ fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
         ShroomHooks.enable()?;
     }
 
-    exceptions::setup_exception_handler();
+    if cfg.handle_exceptions {
+        exceptions::setup_exception_handler();
+    }
     // Launch run in a new thread, so we don't block the main thread
     std::thread::spawn(run);
 

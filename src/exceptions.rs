@@ -2,8 +2,6 @@ use std::{
     ffi::{c_int, c_uint, c_void, CStr},
     fs::OpenOptions,
     io::Write,
-    sync::atomic::AtomicBool,
-    time::Duration,
 };
 
 use chrono::Local;
@@ -207,8 +205,40 @@ fn write_trace(
     Ok(())
 }
 
-// Simple guard to prevent nested exceptions
-static IS_HANDLING_EXCEPTION: AtomicBool = AtomicBool::new(false);
+#[derive(Debug, Default)]
+pub struct ExceptionHandler {
+    init_sym: bool
+}
+
+impl ExceptionHandler {
+    pub const fn new() -> Self {
+        ExceptionHandler {
+            init_sym: false
+        }
+    }
+
+    pub unsafe fn handle_ex(&mut self, info: &EXCEPTION_POINTERS, record: &EXCEPTION_RECORD) {
+        let walker = info.ContextRecord.as_ref().map(|ctx| {
+            let walker = StackWalker::from_ctx(*ctx);
+            if !self.init_sym {
+                self.init_sym = true;
+                if let Err(err) = load_init_sym(&walker) {
+                    log::error!("Failed to init sym: {:?}", err);
+                };
+            }
+            walker
+        });
+    
+        let _ = write_trace(
+            "exception_log.txt",
+            CxxThrowException::try_from(record).ok(),
+            walker,
+        );
+    }
+}
+
+static EXCEPTION_HANDLER: std::sync::Mutex<ExceptionHandler> = std::sync::Mutex::new(ExceptionHandler::new());
+
 
 fn load_init_sym(sw: &StackWalker) -> windows::core::Result<()> {
     sw.sym_init()?;
@@ -233,28 +263,11 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
         return ExceptionContinueSearch.0;
     }
 
-    log::error!("Exception at: {:p}", record.ExceptionAddress);
-    std::thread::sleep(Duration::from_millis(500));
+    log::error!("Exception at: {:p} - code: {:?}", record.ExceptionAddress, record.ExceptionCode);
 
-    if IS_HANDLING_EXCEPTION.swap(true, std::sync::atomic::Ordering::SeqCst) {
-        return ExceptionContinueSearch.0;
+    if let Ok(mut handler) = EXCEPTION_HANDLER.try_lock() {
+        handler.handle_ex(info, record);
     }
-
-    let walker = info.ContextRecord.as_ref().map(|ctx| {
-        let walker = StackWalker::from_ctx(*ctx);
-        if let Err(err) = load_init_sym(&walker) {
-            log::error!("Failed to init sym: {:?}", err);
-        };
-        walker
-    });
-
-    let _ = write_trace(
-        "exception_log.txt",
-        CxxThrowException::try_from(record).ok(),
-        walker,
-    );
-
-    IS_HANDLING_EXCEPTION.store(false, std::sync::atomic::Ordering::SeqCst);
 
     ExceptionContinueSearch.0
 }

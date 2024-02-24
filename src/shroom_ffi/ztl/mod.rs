@@ -16,7 +16,7 @@ pub struct ZException(pub HRESULT);
 #[repr(C, packed)]
 pub struct ZFatalSection {
     pub tib: *const c_void,
-    pub ref_count: isize
+    pub ref_count: isize,
 }
 
 pub const ZEXCEPTION_MAGIC: u32 = 0x19930520;
@@ -48,7 +48,6 @@ impl<T> std::fmt::Debug for ZRefNextOrCount<T> {
     }
 }
 
-
 #[derive(Debug)]
 #[repr(C)]
 pub struct ZRefCounted<T> {
@@ -56,4 +55,22 @@ pub struct ZRefCounted<T> {
     pub next_or_ref: ZRefNextOrCount<T>,
     pub prev: *const ZRefCounted<T>,
     pub ptr: *const T,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct TSingleton<T>(pub *mut T);
+
+impl<T> TSingleton<T> {
+    pub fn is_instantiated(&self) -> bool {
+        !self.0.is_null()
+    }
+
+    pub fn get_instance(&self) -> Option<&T> {
+        unsafe { self.0.as_ref() }
+    }
+
+    pub fn get_instance_mut(&mut self) -> Option<&mut T> {
+        unsafe { self.0.as_mut() }
+    }
 }

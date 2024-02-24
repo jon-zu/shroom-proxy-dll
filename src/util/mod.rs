@@ -1,6 +1,5 @@
 use std::ptr;
 
-use windows::core::PCWSTR;
 use windows::Win32::Foundation::HMODULE;
 
 use region::Protection;
@@ -12,6 +11,7 @@ pub mod packet_schema;
 pub mod profiler;
 pub mod ref_time;
 pub mod stack_walker;
+pub mod static_zxstr;
 
 extern "C" {
     #[link_name = "llvm.returnaddress"]
@@ -54,12 +54,28 @@ pub unsafe fn nop(addr: *mut u8, n: usize) -> region::Result<()> {
     ms_memset(addr, 0x90, n)
 }
 
+fn branch_offset(from: *const u8, to: *const u8) -> isize {
+    to as isize - from as isize - 5
+}
+
+fn branch_bytes(op: u8, from: *const u8, to: *const u8) -> [u8; 5] {
+    let mut data = [0u8; 5];
+    data[0] = op;
+    data[1..].copy_from_slice(&branch_offset(from, to).to_le_bytes()[..]);
+
+    data
+}
+
+
 /// Simple mem patch, which saves the bytes before patching it
 pub struct MemPatch<const N: usize> {
     addr: *const u8,
     patch: [u8; N],
     orig: [u8; N],
 }
+
+unsafe impl<const N: usize> Send for MemPatch<N> {}
+unsafe impl<const N: usize> Sync for MemPatch<N> {}
 
 impl<const N: usize> MemPatch<N> {
     pub unsafe fn new(addr: *const u8, patch: [u8; N]) -> Self {
@@ -79,6 +95,39 @@ impl<const N: usize> HookModule for MemPatch<N> {
     unsafe fn disable(&self) -> anyhow::Result<()> {
         ms_memcpy(self.addr as *mut u8, self.orig.as_ptr(), N)?;
         Ok(())
+    }
+}
+
+pub struct BranchPatch {
+    patch: MemPatch<5>
+}
+
+unsafe impl Send for BranchPatch {}
+unsafe impl Sync for BranchPatch {}
+
+impl BranchPatch {
+    pub unsafe fn new(op: u8, addr: *const u8, target: *const u8) -> Self {
+        let patch = MemPatch::new(addr, branch_bytes(op, addr, target));
+        Self { patch }
+    }
+
+    pub unsafe fn jmp(addr: *mut u8, target: *const u8) -> Self {
+        Self::new(0xe9, addr, target)
+    }
+
+    pub unsafe fn call(addr: *mut u8, target: *const u8) -> Self {
+        Self::new(0xe8, addr, target)
+    }
+
+}
+
+impl HookModule for BranchPatch {
+    unsafe fn enable(&self) -> anyhow::Result<()> {
+        self.patch.enable()
+    }
+
+    unsafe fn disable(&self) -> anyhow::Result<()> {
+        self.patch.disable()
     }
 }
 

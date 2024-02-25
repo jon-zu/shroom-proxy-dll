@@ -23,3 +23,7 @@ time = true
 send_file = "send_packets.txt"
 recv_file = "recv_packets.txt"
 log_data = false
+
+[wz]
+version = "95"
+path = "wz95"

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use windows::core::PCSTR;
+use widestring::U16CString;
+use windows::core::{PCSTR, PCWSTR};
 use std::{ffi::CString, fmt::Write, sync::OnceLock};
 
 #[derive(Debug)]
@@ -31,6 +32,38 @@ impl Serialize for Str {
         S: serde::Serializer,
     {
         self.0.to_str().map_err(serde::ser::Error::custom)?.serialize(serializer)
+    }
+}
+
+#[derive(Debug)]
+pub struct WString(pub U16CString);
+
+impl WString {
+    pub fn new(s: &str) -> Self {
+        Self(U16CString::from_str(s).expect("cstr"))
+    }   
+
+    pub fn as_pcwstr(&self) -> PCWSTR {
+        PCWSTR(self.0.as_ptr() as *const u16)
+    }
+}
+
+impl<'de> Deserialize<'de> for WString {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Self(U16CString::from_str(s).map_err(serde::de::Error::custom)?))
+    }
+}
+
+impl Serialize for WString {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.to_string().map_err(serde::ser::Error::custom)?.serialize(serializer)
     }
 }
 
@@ -66,6 +99,13 @@ pub struct WindowData {
     pub time: bool,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WzData {
+    pub version: WString,
+    pub path: Option<String>
+
+}
+
 impl AutoLoginData {
     pub fn get_world_channel(&self) -> Option<(u32, u32)> {
         self.world.zip(self.channel)
@@ -84,7 +124,8 @@ pub struct Config {
     pub multi_jump: Option<usize>,
     pub extra_dlls: Vec<Str>,
     pub disable_shanda: bool,
-    pub handle_exceptions: bool
+    pub handle_exceptions: bool,
+    pub wz: Option<WzData>
 }
 
 impl Config {
@@ -131,7 +172,11 @@ impl Default for Config {
             multi_jump: Some(2),
             extra_dlls: Vec::default(),
             disable_shanda: true,
-            handle_exceptions: true
+            handle_exceptions: true,
+            wz: Some(WzData {
+                version: WString::new("95"),
+                path: Some("wz95".to_string())
+            })
         }
     }
 }

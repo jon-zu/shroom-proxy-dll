@@ -196,7 +196,7 @@ pub struct ImgHlpSym64 {
 
 impl ImgHlpSym64 {
     pub fn name(&self) -> Option<&CStr> {
-        let buf = unsafe { std::slice::from_raw_parts(self.base.Name.as_ptr(), MAX_SYM_NAME) };
+        let buf = unsafe { std::slice::from_raw_parts(self.base.Name.as_ptr() as *const u8, MAX_SYM_NAME) };
         CStr::from_bytes_until_nul(buf).ok()
     }
 }

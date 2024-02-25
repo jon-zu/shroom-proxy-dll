@@ -1,7 +1,7 @@
 use std::ffi::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use windows::{
-    core::{HRESULT, PCSTR},
+    core::{HRESULT, PCSTR, PCWSTR},
     Win32::{
         Foundation::{HANDLE, HWND},
         UI::WindowsAndMessaging::HHOOK,
@@ -29,6 +29,29 @@ pub type CLogin = c_void;
 pub type CUIAvatar = c_void;
 pub type CStaticFoothold = c_void;
 pub type CInputSystem = c_void;
+pub type IWzPackage = c_void;
+pub type IWzSeekableArchive = c_void;
+pub type IWzFileSystem = c_void;
+
+#[repr(C)]
+pub struct BStrData {
+    pub wstr: PCWSTR,
+    pub str: PCSTR,
+    pub ref_count: c_int,
+}
+
+#[repr(C)]
+pub struct ZtlBstrT(pub *mut BStrData);
+
+impl ZtlBstrT {
+    pub fn as_wstr(&self) -> Option<PCWSTR> {
+        if self.0.is_null() {
+            None
+        } else {
+            unsafe { Some((*self.0).wstr) }
+        }
+    }
+}
 
 #[repr(transparent)]
 pub struct Padding<const N: usize>([u8; N]);
@@ -310,7 +333,6 @@ fn_ref!(
     unsafe extern "thiscall" fn(*mut CWvsApp, c_uint, c_uint, c_int)
 );
 
-
 fn_ref!(
     cinput_system_update_device,
     0x571710,
@@ -338,4 +360,37 @@ fn_ref!(
     cinput_system_generate_auto_key_down,
     0x56f990,
     unsafe extern "thiscall" fn(*mut CInputSystem, msg: *mut ISMSG) -> c_int
+);
+
+fn_ref!(
+    iwz_package_init,
+    0x9c8ec0,
+    unsafe extern "thiscall" fn(
+        *mut IWzPackage,
+        key: ZtlBstrT,
+        base_uol: ZtlBstrT,
+        archive: *mut IWzSeekableArchive,
+    ) -> HRESULT
+);
+
+fn_ref!(
+    iwz_filesystem_init,
+    0x9c8e40,
+    unsafe extern "thiscall" fn(
+        *mut IWzFileSystem,
+        path: ZtlBstrT,
+    ) -> HRESULT
+);
+
+
+fn_ref!(
+    bstr_assign,
+    0x416e50,
+    unsafe extern "thiscall" fn(*mut ZtlBstrT, PCWSTR) -> *mut BStrData
+);
+
+fn_ref!(
+    bstr_ctor,
+    0x4032f0,
+    unsafe extern "thiscall" fn(*mut ZtlBstrT, PCWSTR) -> *mut BStrData
 );

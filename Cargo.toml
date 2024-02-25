@@ -14,7 +14,7 @@ strip = true
 overlay = ["imgui", "hudhook"]
 default = []
 [dependencies.windows]
-version = "0.52"
+version = "0.53"
 features = [
   "implement",
   "Win32_System_Diagnostics_Debug",
@@ -68,6 +68,7 @@ static_assertions = "1"
 win_dbg_logger = "0.1.0"
 num_enum = "0.7.2"
 toml = "0.8.10"
+widestring = "1.0.2"
 #tokio-websockets = { version = "0.5", features = [
 #  "client",
 #  "getrandom",

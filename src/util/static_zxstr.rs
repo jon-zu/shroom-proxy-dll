@@ -12,7 +12,17 @@ pub struct StaticZXStringData<const N: usize> {
 }
 
 impl<const N: usize> StaticZXStringData<N> {
-    pub fn get(&self) -> ZXString8 {
+    pub const fn new(s: &[u8; N]) -> Self {
+        Self {
+            ref_count: AtomicI32::new(1),
+            cap: N as i32,
+            byte_len: N as i32,
+            data: *s,
+            fake_zero: 0
+        }
+    }
+
+    pub fn get(&'static self) -> ZXString8 {
         self.ref_count.fetch_add(1, Ordering::SeqCst);
         ZXString8::from_ptr(self.data.as_ptr())
     }
@@ -21,13 +31,7 @@ impl<const N: usize> StaticZXStringData<N> {
 
 macro_rules! static_ref_string {
     ($name:ident, $len:expr, $lit:literal) => {
-        pub static $name: StaticZXStringData<$len> = StaticZXStringData {
-            ref_count: AtomicI32::new(1),
-            cap: $len,
-            byte_len: $len,
-            data: *$lit,
-            fake_zero: 0
-        };
+        pub static $name: StaticZXStringData<$len> = StaticZXStringData::new($lit);
     }
 }
 

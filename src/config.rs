@@ -173,6 +173,7 @@ impl Default for Config {
             extra_dlls: Vec::default(),
             disable_shanda: true,
             handle_exceptions: true,
+            wz: None
             /*wz: Some(WzData {
                 version: WString::new("95"),
                 path: Some("wz95".to_string())

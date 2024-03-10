@@ -3,16 +3,13 @@ use std::{
     time::Instant,
 };
 
-use widestring::U16CString;
-use windows::core::{HRESULT, PCWSTR};
 
 use crate::{
     config::CONFIG,
     hook_list, lazy_hook,
     shroom_ffi::{
-        self, bstr_assign, ztl::zxstr::ZXString8, CiobufferManipulatorDe, CiobufferManipulatorEn, IWzFileSystem, IWzPackage, IWzSeekableArchive, ZtlBstrT
+        self, ztl::zxstr::ZXString8, CiobufferManipulatorDe, CiobufferManipulatorEn
     },
-    static_lazy_hook,
     util::hooks::{HookModule, LazyHook},
 };
 
@@ -69,50 +66,6 @@ unsafe extern "stdcall" fn ciobuffer_manipulator_de_hook(_buf: *mut c_char, _ln:
     1
 }
 
-static_lazy_hook!(
-    WZ_PACKAGE_HOOK,
-    shroom_ffi::IwzPackageInitRef,
-    wz_package_hook
-);
-
-unsafe extern "thiscall" fn wz_package_hook(
-    this: *mut IWzPackage,
-    mut key: ZtlBstrT,
-    base_uol: ZtlBstrT,
-    archive: *mut IWzSeekableArchive,
-) -> HRESULT {
-    let cfg = CONFIG.get().unwrap();
-    if let Some(version) = cfg.wz.as_ref().map(|wz| &wz.version) {
-        bstr_assign()(&mut key as *mut _, version.as_pcwstr());
-    }
-    let key_ = key.as_wstr().map(|s| s.to_string());
-    let base_uol_ = base_uol.as_wstr().map(|s| s.to_string());
-    log::info!("wz_package_hook: {:?} {:?}", key_, base_uol_);
-    WZ_PACKAGE_HOOK.call(this, key, base_uol, archive)
-}
-
-static_lazy_hook!(
-    WZ_FS_HOOK,
-    shroom_ffi::IwzFilesystemInitRef,
-    wz_fs_hook
-);
-
-unsafe extern "thiscall" fn wz_fs_hook(
-    this: *mut IWzFileSystem,
-    mut path: ZtlBstrT,
-) -> HRESULT {
-    let cfg = CONFIG.get().unwrap();
-    log::info!("wz fs init: {:?}", path.as_wstr().map(|s| s.to_string()));
-    if let Some(new_path) = cfg.wz.as_ref().and_then(|wz| wz.path.as_ref()) {
-        let current_dir = std::env::current_dir().unwrap();
-        let new_path = current_dir.join(new_path);
-        
-        let str = U16CString::from_os_str_truncate(new_path);
-        log::info!("wz fs new path: {:?}", str.to_string_lossy());
-        bstr_assign()(&mut path as *mut _, PCWSTR(str.as_ptr()));
-    }
-    WZ_FS_HOOK.call(this, path)
-}
 
 hook_list!(
     ShandaHooks,
@@ -120,11 +73,86 @@ hook_list!(
     CIOBUFFER_MANIPULATOR_DE_HOOK,
 );
 
-hook_list!(
-    WzHooks,
-    WZ_PACKAGE_HOOK,
-    WZ_FS_HOOK,
-);
+/* 
+unsafe extern "fastcall" fn encode_dmg(this: *mut COutPacket, crit: u32, dmg: u32) {
+    coutpacket_encode4()(this, dmg);
+    coutpacket_encode4()(this, crit);
+}
+
+
+#[naked]
+pub(crate) unsafe extern "thiscall" fn melee_encode4_hook(this: *mut COutPacket, val: c_int) {
+    unsafe {
+        std::arch::asm!(
+            // push the crit field
+            // edx is reserved during call
+            "mov edx, dword [ebp-0xbf8]",
+            "mov edx, dword [edx+eax*4+0x54]",
+            "jmp encode_dmg",
+            options(noreturn)
+        );
+    }
+}
+
+
+#[naked]
+pub(crate) unsafe extern "thiscall" fn shoot_encode4_hook(this: *mut COutPacket, val: c_int) {
+    unsafe {
+        std::arch::asm!(
+            // push the crit field
+            // edx is reserved during call
+            "mov edx, dword [ebp-0x1050]",
+            "mov edx, dword [edx+eax*4+0x54]",
+            "jmp encode_dmg",
+            options(noreturn)
+        );
+    }
+}
+
+#[naked]
+pub(crate) unsafe extern "thiscall" fn magic_encode4_hook(this: *mut COutPacket, val: c_int) {
+    unsafe {
+        std::arch::asm!(
+            // push the crit field
+            // edx is reserved during call
+            "mov edx, dword [ebp-0x1538]",
+            "mov edx, dword [edx+eax*4+0x54]",
+            "jmp encode_dmg",
+            options(noreturn)
+        );
+    }
+}
+
+
+#[naked]
+pub(crate) unsafe extern "thiscall" fn body_encode4_hook(this: *mut COutPacket, val: c_int) {
+    unsafe {
+        std::arch::asm!(
+            // push the crit field
+            // edx is reserved during call
+            "mov edx, dword [ebp-0x1768]",
+            "mov edx, dword [edx+eax*4+0x54]",
+            "jmp encode_dmg",
+            options(noreturn)
+        );
+    }
+}
+
+#[naked]
+pub(crate) unsafe extern "thiscall" fn meso_explosion_encode4_hook(this: *mut COutPacket, val: c_int) {
+    unsafe {
+        std::arch::asm!(
+            // push the crit field
+            // edx is reserved during call
+            "mov eax, dword [ebp-0xb30]",
+            "mov edx, dword [ebp-0xb20]",
+            "mov edx, dword [edx+eax*4+0x54]",
+            "jmp encode_dmg",
+            options(noreturn)
+        );
+    }
+}
+*/
 
 pub struct ShroomHooks;
 
@@ -135,7 +163,6 @@ impl HookModule for ShroomHooks {
         CMSGBOX_HOOK.enable_if(cfg.log_msgbox)?;
         CWVS_APP_INITIALIZE_GAME_DATA_HOOK.enable()?;
         ShandaHooks.enable_if(cfg.disable_shanda)?;
-        WzHooks.enable_if(cfg.wz.is_some())?;
 
         Ok(())
     }
@@ -146,7 +173,6 @@ impl HookModule for ShroomHooks {
         CMSGBOX_HOOK.disable_if(cfg.log_msgbox)?;
         CWVS_APP_INITIALIZE_GAME_DATA_HOOK.disable()?;
         ShandaHooks.disable_if(cfg.disable_shanda)?;
-        WzHooks.disable_if(cfg.wz.is_some())?;
 
         Ok(())
     }

@@ -25,5 +25,5 @@ recv_file = "recv_packets.txt"
 log_data = false
 
 [wz]
-version = "95"
-path = "wz95"
+version = "96"
+#path = "wz95"

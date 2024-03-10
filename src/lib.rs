@@ -25,14 +25,12 @@ use windows::{
     Win32::{
         Foundation::{BOOL, HMODULE},
         System::{
-            Console::AllocConsole,
-            LibraryLoader::{GetProcAddress, LoadLibraryA},
-            SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH},
+            Console::AllocConsole, LibraryLoader::{GetProcAddress, LoadLibraryA}, SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH}
         },
     },
 };
 
-use crate::{config::CONFIG, login::LoginHooks, socket::PacketHooks};
+use crate::{config::CONFIG, login::LoginHooks, socket::PacketHooks, wz::WzHooks};
 
 //pub mod net;
 pub mod app;
@@ -46,6 +44,7 @@ pub mod shroom_hooks;
 pub mod socket;
 pub mod util;
 pub mod win32_hooks;
+pub mod wz;
 
 type FDirectInput8Create = unsafe extern "system" fn(
     hinst: HMODULE,
@@ -81,6 +80,14 @@ fn setup_logs(backend: &LogBackend) -> anyhow::Result<()> {
     let cfg = simplelog::Config::default();
 
     match backend {
+        LogBackend::Stdout => {
+            TermLogger::init(
+                filter,
+                cfg,
+                TerminalMode::Mixed,
+                ColorChoice::Auto,
+            )?;
+        }
         LogBackend::Console => {
             unsafe { AllocConsole() }.context("Alloc console")?;
             TermLogger::init(
@@ -133,15 +140,14 @@ fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
 
             // Setup the logger as console
             setup_logs(&cfg.log_backend)?;
-        },
+        }
         Err(err) => {
             let cfg = config::Config::default();
-            let cfg  = CONFIG.get_or_init(|| cfg);
+            let cfg = CONFIG.get_or_init(|| cfg);
 
             // Setup the logger as console
             setup_logs(&cfg.log_backend)?;
             log::error!("Failed to load config: {:?} - Using default config", err);
-
         }
     }
     let cfg = CONFIG.get().unwrap();
@@ -159,6 +165,7 @@ fn initialize(hmodule: HMODULE) -> anyhow::Result<()> {
     unsafe {
         Win32Hooks.enable()?;
         ShroomHooks.enable()?;
+        WzHooks.enable()?;
     }
 
     if cfg.handle_exceptions {

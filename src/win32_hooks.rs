@@ -36,7 +36,7 @@ extern "system" fn find_first_file_detour(
         if !SPOOFED_PROXY_DLL.fetch_or(true, Ordering::SeqCst) {
             log::info!("Spoofing FindFirstFileA for proxy dll");
             // Fake the file name with a dummy value
-            file_name = s!("*.wz");
+            file_name = s!("/abc/ddd");
         }
     }
     FIND_FIRST_FILE_A_HOOK.call(file_name, find_file_data)
@@ -96,6 +96,7 @@ static_win32_fn_hook!(
     ) -> HANDLE
 );
 
+
 extern "system" fn create_window_ex_a_hook(
     dwexstyle: WINDOW_EX_STYLE,
     lpclassname: PCSTR,
@@ -110,7 +111,17 @@ extern "system" fn create_window_ex_a_hook(
     hinstance: HINSTANCE,
     lpparam: *const c_void,
 ) -> HANDLE {
-    log::info!("Spoofing window title");
+     if !lpclassname.is_null() {
+        if let Ok(class) = unsafe { lpclassname.to_string() } {
+            log::info!("Class: {}", class);
+            if class == "MapleStoryClass" {
+                log::info!("About to hook pc apis");
+            
+            }
+        }
+    }
+
+    //log::info!("Spoofing window title");
     let mut wnd_title = CONFIG.get().unwrap().window_title();
     lpwindowname = match wnd_title {
         Some(ref mut name) => PCSTR::from_raw(name.as_ptr() as *const u8),

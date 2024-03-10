@@ -72,8 +72,8 @@ impl Serialize for WString {
 pub enum LogBackend {
     Console,
     File(String),
-    Debug
-
+    Debug,
+    Stdout
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -100,10 +100,53 @@ pub struct WindowData {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct WzData {
+pub struct WzFileData {
     pub version: WString,
     pub path: Option<String>
+}
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WzImageData {
+    pub path: String,
+    pub retain_delay: usize,
+    pub cachte_delay: usize
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum WzData {
+    Image(WzImageData),
+    Wz(WzFileData),
+    Default
+}
+
+impl WzData {
+    pub fn is_default(&self) -> bool {
+        matches!(self, WzData::Default)
+    }
+
+
+    pub fn is_image(&self) -> bool {
+        matches!(self, WzData::Image(_))
+    }
+
+    pub fn as_image(&self) -> Option<&WzImageData> {
+        match self {
+            WzData::Image(image) => Some(image),
+            _ => None
+        }
+    }
+
+    pub fn is_wz(&self) -> bool {
+        matches!(self, WzData::Wz(_))
+    }
+
+
+    pub fn as_wz(&self) -> Option<&WzFileData> {
+        match self {
+            WzData::Wz(wz) => Some(wz),
+            _ => None
+        }
+    }
 }
 
 impl AutoLoginData {
@@ -125,7 +168,8 @@ pub struct Config {
     pub extra_dlls: Vec<Str>,
     pub disable_shanda: bool,
     pub handle_exceptions: bool,
-    pub wz: Option<WzData>
+    pub wz: WzData,
+    pub lazy_tmpl_loading: bool,
 }
 
 impl Config {
@@ -147,7 +191,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            log_backend: LogBackend::Console, //LogBackend::File("shroom.log".to_string()),
+            log_backend: LogBackend::Stdout,
             skip_logo: true,
             log_msgbox: false,
             pdb_file: Some(Str::new("MapleStory.pdb")),
@@ -173,11 +217,18 @@ impl Default for Config {
             extra_dlls: Vec::default(),
             disable_shanda: true,
             handle_exceptions: true,
-            wz: None
-            /*wz: Some(WzData {
+            wz: WzData::Wz(WzFileData {
                 version: WString::new("95"),
                 path: Some("wz95".to_string())
-            })*/
+            }),
+            lazy_tmpl_loading: true
+            /*wz: WzData::Image(
+                WzImageData {
+                    path: "Data".to_string(),
+                    retain_delay: 1000,
+                    cachte_delay: 1000
+                }
+            )*/
         }
     }
 }

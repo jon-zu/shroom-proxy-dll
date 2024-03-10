@@ -13,6 +13,7 @@ use crate::fn_ref;
 pub mod error_codes;
 pub mod socket;
 pub mod ztl;
+pub mod wz;
 /*pub mod com {
     pub mod iface;
 }
@@ -21,7 +22,7 @@ pub mod client_socket;
 
 use self::{
     socket::CClientSocket,
-    ztl::{zxarr::ZArray, zxstr::ZXString8, TSingleton},
+    ztl::{zxarr::ZArray, zxstr::ZXString8, BStr, BStrData, TSingleton},
 };
 
 pub type CLogo = c_void;
@@ -32,26 +33,7 @@ pub type CInputSystem = c_void;
 pub type IWzPackage = c_void;
 pub type IWzSeekableArchive = c_void;
 pub type IWzFileSystem = c_void;
-
-#[repr(C)]
-pub struct BStrData {
-    pub wstr: PCWSTR,
-    pub str: PCSTR,
-    pub ref_count: c_int,
-}
-
-#[repr(C)]
-pub struct ZtlBstrT(pub *mut BStrData);
-
-impl ZtlBstrT {
-    pub fn as_wstr(&self) -> Option<PCWSTR> {
-        if self.0.is_null() {
-            None
-        } else {
-            unsafe { Some((*self.0).wstr) }
-        }
-    }
-}
+pub type ZtlBStrT = BStr;
 
 #[repr(transparent)]
 pub struct Padding<const N: usize>([u8; N]);
@@ -367,8 +349,8 @@ fn_ref!(
     0x9c8ec0,
     unsafe extern "thiscall" fn(
         *mut IWzPackage,
-        key: ZtlBstrT,
-        base_uol: ZtlBstrT,
+        key: ZtlBStrT,
+        base_uol: ZtlBStrT,
         archive: *mut IWzSeekableArchive,
     ) -> HRESULT
 );
@@ -378,7 +360,7 @@ fn_ref!(
     0x9c8e40,
     unsafe extern "thiscall" fn(
         *mut IWzFileSystem,
-        path: ZtlBstrT,
+        path: ZtlBStrT,
     ) -> HRESULT
 );
 
@@ -386,11 +368,17 @@ fn_ref!(
 fn_ref!(
     bstr_assign,
     0x416e50,
-    unsafe extern "thiscall" fn(*mut ZtlBstrT, PCWSTR) -> *mut BStrData
+    unsafe extern "thiscall" fn(*mut BStr, PCWSTR) -> *mut BStrData
 );
 
 fn_ref!(
     bstr_ctor,
     0x4032f0,
-    unsafe extern "thiscall" fn(*mut ZtlBstrT, PCWSTR) -> *mut BStrData
+    unsafe extern "thiscall" fn(*mut BStr, PCWSTR) -> *mut BStrData
+);
+
+fn_ref!(
+    bstr_free,
+    0x4032f0,
+    unsafe extern "thiscall" fn(*mut BStr)
 );
